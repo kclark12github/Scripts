@@ -1,72 +1,3 @@
-'Backup.vbs
-'	Visual Basic Script Used to Automate Backups (NTBACKUP) on a Weekly Basis...
-'   Copyright © 2006-2009, Ken Clark
-'*********************************************************************************************************************************
-'
-'   Modification History:
-'   Date:       Developer:		Description:
-'	06/18/09	Ken Clark		Added logic to avoid backups for inactive content;
-'								Added LogMessage;
-'								Added object/memory cleanup;
-'								Added Modification History;
-'	05/21/09	Ken Clark		Split Downloads backup into multiple subdirectory-based backups;
-'	12/31/08	Ken Clark		Added time-stamps on output as well as progress info;
-'   12/23/08    Ken Clark		Added STDOUT output and command-line support;
-'   12/08/08    Ken Clark       Split "My Music" backup into separate pieces to reduce size of overall backup file;
-'   04/18/08    Ken Clark       Updated AltBackupFolder to be registry-based like BackupFolder;
-'   03/21/06    Ken Clark		Created;
-'=================================================================================================================================
-'Ntbackup
-'Perform backup operations at a command prompt or from a batch file using the ntbackup command followed by various parameters.
-'
-'Syntax
-'   ntbackup backup [systemstate] "@bks file name" /J {"job name"} [/P {"pool name"}] [/G {"guid name"}] [/T { "tape name"}] [/N {"media name"}] [/F {"file name"}] [/D {"set description"}] [/DS {"server name"}] [/IS {"server name"}] [/A] [/V:{yes|no}] [/R:{yes|no}] [/L:{f|s|n}] [/M {backup type}] [/RS:{yes|no}] [/HC:{on|off}] [/SNAP:{on|off}]
-'
-'Parameters
-'   systemstate             Specifies that you want to back up the System State data. When you select this option, the backup type will be forced to 
-'                           normal or copy. 
-'   @bks file name          Specifies the name of the backup selection file (.bks file) to be used for this backup operation. The at (@) character must 
-'                           precede the name of the backup selection file. A backup selection file contains information on the files and folders you 
-'                           have selected for backup. You have to create the file using the graphical user interface (GUI) version of Backup. 
-'   /J {"job name"}         Specifies the job name to be used in the log file. The job name usually describes the files and folders you are backing up 
-'                           in the current backup job as well as the date and time you backed up the files. 
-'   /P {"pool name"}        Specifies the media pool from which you want to use media. This is usually a subpool of the Backup media pool, such as 4mm 
-'                           DDS. If you select this you cannot use the /A, /G, /F, or /T command-line options. 
-'   /G {"guid name"}        Overwrites or appends to this tape. Do not use this switch in conjunction with /P. 
-'   /T {"tape name"}        Overwrites or appends to this tape. Do not use this switch in conjunction with /P. 
-'   /N {"media name"}       Specifies the new tape name. You must not use /A with this switch. 
-'   /F {"file name"}        Logical disk path and file name. You must not use the following switches with this switch: /P /G /T. 
-'   /D {"set description"}  Specifies a label for each backup set. 
-'   /DS {"server name"}     Backs up the directory service file for the specified Microsoft Exchange Server. 
-'   /IS {"server name"}     Backs up the Information Store file for the specified Microsoft Exchange Server. 
-'   /A                      Performs an append operation. Either /G or /T must be used in conjunction with this switch. Do not use this switch in 
-'                           conjunction with /P. 
-'   /V:{yes|no}             Verifies the data after the backup is complete. 
-'   /R:{yes|no}             Restricts access to this tape to the owner or members of the Administrators group. 
-'   /L:{f|s|n}              Specifies the type of log file: f=full, s=summary, n=none (no log file is created). 
-'   /M {backup type}        Specifies the backup type. It must be one of the following: normal, copy, differential, incremental, or daily. 
-'   /RS:{yes|no}            Backs up the migrated data files located in Remote Storage. The /RS command-line option is not required to back up the local 
-'                           Removable Storage database (that contains the Remote Storage placeholder files). When you backup the %systemroot% folder, 
-'                           Backup automatically backs up the Removable Storage database as well. 
-'   /HC:{on|off}            Uses hardware compression, if available, on the tape drive. 
-'   /SNAP:{on|off}          Specifies whether or not the backup is a volume shadow copy. 
-'   /M {backup type}        Specifies the backup type. It must be one of the following: normal, copy, differential, incremental, or daily. 
-'   /?                      Displays help at the command prompt. 
-'Remarks
-'   - You cannot restore files from the command line using the ntbackup command. 
-'   - The following command-line options default to what you have already set using the graphical user interface (GUI) version of Backup unless they are 
-'     changed by a command-line option: /V /R /L /M /RS /HC. For example, if hardware compression is turned on in the Options dialog box in Backup, it 
-'     will be used if /HC is not specified on the command line. However, if you specify /HC:off at the command line, it overrides the Option dialog box 
-'     setting and compression is not used. 
-'   - If you have Windows Media Services running on your computer, and you want to back up the files associated with these services, see "Running Backup 
-'     with Windows Media Services" in the Windows Media Services online documentation. You must follow the procedures outlined in the Windows Media 
-'     Services online documentation before you can back up or restore files associated with Windows Media Services. 
-'   - You can only back up the System State data on a local computer. You cannot back up the System State data on a remote computer 
-'   - If you are using Removable Storage to manage media, or you are using the Remote Storage to store data, then you should regularly back up the files 
-'     that are in the following folders: 
-'       Systemroot\System32\Ntmsdata
-'       Systemroot\System32\Remotestorage
-'     This ensures that all Removable Storage and Remote Storage data can be restored.
 Private Sub LogMessage(Message)
 	Const ForAppending = 8
 	Const UnicodeFormat = -1
@@ -430,6 +361,7 @@ Public Sub DoBackup(bks, FileName, JobName, Description, iJob, totalJobs)
 
 	LogMessage Now() & vbTab & "Backing-Up " & bks & "..."
 	If SomethingToDo(bks, FileName) Then
+exit sub
 		dtNow = Now()
 		StartTimeStamp = DateDiff("s", BaseCTime(), dtNow)      
 		If Not objFSO.FileExists(FileName) Then
