@@ -337,7 +337,7 @@ Private Function CheckDateModified(objFile, excluded, creationDate, FolderCount,
 			Case Else
 		End Select
 	Else
-		LogMessage Now() & vbTab & "Found " & Path & " modified (" & LastModified & ") after " & creationDate
+		LogMessage Now() & vbTab & vbTab & "Found " & Path & " modified (" & LastModified & ") after " & creationDate
 	End If
 End Function
 Private Function ScanSubFolders(Folder, excluded, creationDate, FolderCount, FileCount)
@@ -347,15 +347,15 @@ Private Function ScanSubFolders(Folder, excluded, creationDate, FolderCount, Fil
     ScanSubFolders = False
 	If CheckDateModified(Folder, excluded, creationDate, FolderCount, FileCount) Then ScanSubFolders = True : Exit Function
 	
-	strComputer = "."
-	Set objWMIService = GetObject("winmgmts:\\" & strComputer & "\root\CIMV2")
-    Set colFileList = objWMIService.ExecQuery("ASSOCIATORS OF {Win32_Directory.Name='" & Folder & "'} Where ResultClass = CIM_DataFile")
-    For Each objFile In colFileList
+	'strComputer = "."
+	'Set objWMIService = GetObject("winmgmts:\\" & strComputer & "\root\CIMV2")
+    'Set colFileList = objWMIService.ExecQuery("ASSOCIATORS OF {Win32_Directory.Name='" & Folder & "'} Where ResultClass = CIM_DataFile")
+    For Each objFile In Folder.Files
 		If CheckDateModified(objFile, excluded, creationDate, FolderCount, FileCount) Then ScanSubFolders = True : Exit For
     Next
     If Not ScanSubFolders Then
 		For Each Subfolder in Folder.SubFolders
-		    If ScanSubFolders(Subfolder, excluded, creationDate, FolderCount, FileCount) Then Exit For
+		    If ScanSubFolders(Subfolder, excluded, creationDate, FolderCount, FileCount) Then ScanSubFolders = True : Exit For
 		Next
 	End If
 
@@ -392,7 +392,8 @@ Private Function SomethingToDo(bks, FileName)
 					included(iIncluded) = Trim(strLine)
 				End If		    
 			Loop
-			objFile.Close				
+			objFile.Close
+			If iExcluded = 0 Then ReDim excluded(0)
 
 			For iIncluded = 1 To UBound(included)
 				If UCase(included(iIncluded)) = "SYSTEMSTATE" Then SomethingToDo = True : Exit Function
