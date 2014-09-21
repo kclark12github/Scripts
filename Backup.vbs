@@ -232,7 +232,7 @@ End Function
 Public Function GetCreationDate(bksPath)
 	Dim strComputer, objWMIService, FSO, objFile
 	Dim ParentFolder, BaseName, Extension
-	Dim colFileList, varDate
+	Dim colFileList, varDate, SQLSource
 	
 	strComputer = "."
 	Set objWMIService = GetObject("winmgmts:\\" & strComputer & "\root\CIMV2")
@@ -252,17 +252,17 @@ Public Function GetCreationDate(bksPath)
 	'Note that we're not currently handling DST...
 	
 	'LogMessage "Attempting to find CreationDate for " & bksPath & "..."
-    Set colFileList = objWMIService.ExecQuery("ASSOCIATORS OF {Win32_Directory.Name='" & ParentFolder & "'} Where ResultClass = CIM_DataFile")
+    'Set colFileList = objWMIService.ExecQuery("ASSOCIATORS OF {Win32_Directory.Name='" & ParentFolder & "'} Where ResultClass = CIM_DataFile")
+	SQLSource = "Select * from CIM_DataFile where Path='\\" & Replace(Mid(ParentFolder, 4), "\", "\\") & "\\' And FileName Like '" & BaseName & ".%' And Extension='" & Extension & "'"
+	Set colFileList = objWMIService.ExecQuery(SQLSource, "WQL", wbemFlagReturnImmediately + wbemFlagForwardOnly)
     For Each objFile In colFileList
-		If UCase(Left(objFile.FileName, Len(BaseName))) = UCase(BaseName) And UCase(objFile.Extension) = UCase(Extension) Then
-			'LogMessage Now() & vbTab & objFile.FileName & "." & objFile.Extension & " (" & TypeName(objFile) & ")"
-            Set varDate = CreateObject("WbemScripting.SWbemDateTime")
-            varDate.Value = objFile.CreationDate
-            'LogMessage Now() & vbTab & varDate.GetVarDate(True) & " (" & objFile.CreationDate & ") - " & objFile.Name
-            GetCreationDate = varDate.GetVarDate(True)
-            Set varDate = Nothing
-            Exit For
-        End If
+		'LogMessage Now() & vbTab & objFile.FileName & "." & objFile.Extension & " (" & TypeName(objFile) & ")"
+        Set varDate = CreateObject("WbemScripting.SWbemDateTime")
+        varDate.Value = objFile.CreationDate
+        'LogMessage Now() & vbTab & varDate.GetVarDate(True) & " (" & objFile.CreationDate & ") - " & objFile.Name
+        GetCreationDate = varDate.GetVarDate(True)
+        Set varDate = Nothing
+        Exit For
     Next
 
 	Set FSO = Nothing
