@@ -285,7 +285,7 @@ Else
     Select Case WeekDayName(WeekDay(Date))
         Case "Sunday"
         Case "Monday"
-            'DoBackup SharedDocuments & "\My Music",                                   AltBackupFolder & "\Shared Documents - My Music.bkf",       "My Music",                  "My Music",                  iJob, totalJobs:    iJob = iJob + 1
+            'DoBackup SharedDocuments & "\My Music",                                   AltBackupFolder & "\Shared Documents - My Music.bkf",      "My Music",                  "My Music",                  iJob, totalJobs:    iJob = iJob + 1
             DoBackup "@" & SharedDocuments & "\My Music - Rock - Jimmy Buffett.bks",   AltBackupFolder & "\My Music - Rock - Jimmy Buffett.bkf",  "My Music - Jimmy Buffett",  "My Music - Jimmy Buffett",  iJob, totalJobs:    iJob = iJob + 1
             DoBackup "@" & SharedDocuments & "\My Music - Rock - Eric Clapton.bks",    AltBackupFolder & "\My Music - Rock - Eric Clapton.bkf",   "My Music - Eric Clapton",   "My Music - Eric Clapton",   iJob, totalJobs:    iJob = iJob + 1
             DoBackup "@" & SharedDocuments & "\My Music - Rock - ELO.bks",             AltBackupFolder & "\My Music - Rock - ELO.bkf",            "My Music - ELO",            "My Music - ELO",            iJob, totalJobs:    iJob = iJob + 1
@@ -306,15 +306,25 @@ Else
             'DoBackup SharedDocuments & "\Game Images",                  AltBackupFolder & "\Shared Documents - Game Images.bkf",    "Game Images",    "Game Images",                                        iJob, totalJobs:    iJob = iJob + 1
             'DoBackup SharedDocuments & "\Software Images",              AltBackupFolder & "\Shared Documents - Software Images.bkf","Software Images","Software Images",                                    iJob, totalJobs:    iJob = iJob + 1
         Case "Tuesday"
-            DoBackup "C:\Documents and Settings\kclark\My Documents",   BackupFolder & "\GZPR141 My Documents.bkf",                 "GZPR141 My Documents",              "GZPR141 My Documents",            iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "C:\Projects",                                     BackupFolder & "\Projects.bkf",                             "Projects",                          "Projects",                        iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\SharedDocuments.bks",    BackupFolder & "\Shared Documents.bkf",                     "Shared Documents",                  "Shared Documents",                iJob, totalJobs:    iJob = iJob + 1
-            DoBackup SharedDocuments & "\Downloads",                    BackupFolder & "\Shared Documents - Downloads.bkf",         "Shared Documents - Downloads",      "Downloads",                       iJob, totalJobs:    iJob = iJob + 1
-            DoBackup SharedDocuments & "\My Pictures",                  BackupFolder & "\Shared Documents - My Pictures.bkf",       "Shared Documents - My Pictures",    "My Pictures",                     iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Profile.bks",         BackupFolder & "\My Profile.bkf",                           "My Profile",                        "My Profile",                      iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "@" & SharedDocuments & "\My Profile.bks",         BackupFolder & "\My Profile.bkf",                           "My Profile",                       "My Profile",                       iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "C:\Documents and Settings\kclark\My Documents",   BackupFolder & "\GZPR141 My Documents.bkf",                 "GZPR141 My Documents",             "GZPR141 My Documents",             iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "@" & SharedDocuments & "\SharedDocuments.bks",    BackupFolder & "\Shared Documents.bkf",                     "Shared Documents",                 "Shared Documents",                 iJob, totalJobs:    iJob = iJob + 1
+            DoBackup SharedDocuments & "\Downloads\Controls",           BackupFolder & "\Downloads - Controls.bkf",					"Downloads - Controls",				"Downloads - Controls",             iJob, totalJobs:    iJob = iJob + 1
+            DoBackup SharedDocuments & "\Downloads\Games",              BackupFolder & "\Downloads - Games.bkf",					"Downloads - Games",				"Downloads - Games",                iJob, totalJobs:    iJob = iJob + 1
+            DoBackup SharedDocuments & "\Downloads\Hardware",           BackupFolder & "\Downloads - Hardware.bkf",					"Downloads - Hardware",				"Downloads - Hardware",             iJob, totalJobs:    iJob = iJob + 1
+            DoBackup SharedDocuments & "\Downloads\Personal Finance",   BackupFolder & "\Downloads - Personal Finance.bkf",         "Downloads - Personal Finance",		"Downloads - Personal Finance",     iJob, totalJobs:    iJob = iJob + 1
+            DoBackup SharedDocuments & "\Downloads\SunGard",            BackupFolder & "\Downloads - SunGard.bkf",					"Downloads - SunGard",				"Downloads - SunGard",              iJob, totalJobs:    iJob = iJob + 1
+            DoBackup SharedDocuments & "\Downloads\Tools - Development",BackupFolder & "\Downloads - Tools - Development.bkf",      "Downloads - Tools(Development)",	"Downloads - Tools(Development)",   iJob, totalJobs:    iJob = iJob + 1
+            DoBackup SharedDocuments & "\Downloads\Tools - Music",      BackupFolder & "\Downloads - Tools - Music.bkf",			"Downloads - Tools(Music)",			"Downloads - Tools(Music)",         iJob, totalJobs:    iJob = iJob + 1
+            DoBackup SharedDocuments & "\Downloads\Tools - PC",         BackupFolder & "\Downloads - Tools - PC.bkf",				"Downloads - Tools(PC)",			"Downloads - Tools(PC)",            iJob, totalJobs:    iJob = iJob + 1
+            DoBackup SharedDocuments & "\Downloads\Tools - Publishing", BackupFolder & "\Downloads - Tools - Publishing.bkf",       "Downloads - Tools(Publishing)",	"Downloads - Tools(Publishing)",    iJob, totalJobs:    iJob = iJob + 1
+            DoBackup SharedDocuments & "\Downloads\Tools - Web",        BackupFolder & "\Downloads - Tools - Web.bkf",				"Downloads - Tools(Web)",			"Downloads - Tools(Web)",           iJob, totalJobs:    iJob = iJob + 1
+            DoBackup SharedDocuments & "\Downloads\Web Downloads",      BackupFolder & "\Downloads - Web Downloads.bkf",			"Downloads - Web Downloads",		"Downloads - Web Downloads",        iJob, totalJobs:    iJob = iJob + 1
         Case "Wednesday"
             DoBackup "C:\WebShare\wwwroot",                             BackupFolder & "\WebShare - wwwroot.bkf",                   "WebShare - wwwroot",                "WebShare - wwwroot",              iJob, totalJobs:    iJob = iJob + 1
             DoBackup "C:\WebShare\wwwArchive",                          BackupFolder & "\WebShare - wwwArchive.bkf",                "WebShare - wwwArchive",             "WebShare - wwwArchive",           iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "C:\Projects",                                     BackupFolder & "\Projects.bkf",                             "Projects",                          "Projects",                        iJob, totalJobs:    iJob = iJob + 1
+            DoBackup SharedDocuments & "\My Pictures",                  BackupFolder & "\Shared Documents - My Pictures.bkf",       "Shared Documents - My Pictures",    "My Pictures",                     iJob, totalJobs:    iJob = iJob + 1
         Case "Thursday"
             'VSSArchive Runs Thursdays...
         Case "Friday"
