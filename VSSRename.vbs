@@ -172,6 +172,11 @@ Private Sub GetProjectFiles(searchString)
 					strLine = vssProject & strLine
 				Loop
 				vssProject = mid(strline, 1, InStr(strLine, "*") - 1)
+				If Right(strLine, 1) <> ":" Then
+					Do
+						strLine = objFile.ReadLine
+					Loop Until Right(strLine, 1) = ":"
+				End If
 			ElseIf Trim(strLine) <> "" Then
 				iProject = iProject + 1
 				ReDim Preserve ProjectList(iProject) 
@@ -210,13 +215,16 @@ Private Function GetVSSProject(Project)
 	GetVSSProject = VSSProject
 End Function
 Private Sub SetCurrentProject(Project)
-	Dim CommandLine, VSSProject
+	Dim CommandLine, VSSProject, sOutput
 	VSSProject = GetVSSProject(Project)
 	If VSSProject = CurrentVSSProject Then Exit Sub
 	
 	CommandLine = "CP " & Chr(34) & VSSProject & Chr(34)	'\\WSRV08\VSS\win32\SS CP "$/FiRRe Version 4.6"
-	LogMessage("         SS " & CommandLine)
-	LogMessage("         " & ExecuteSS(CommandLine))
+	'LogMessage("         SS " & CommandLine)
+	'LogMessage("         " & ExecuteSS(CommandLine))
+	sOutput = ExecuteSS(CommandLine)
+	if Trim(sOutput) <> vbNullString Then LogMessage("         " & sOutput)
+	sOutput = vbNullString
 End Sub
 Private Sub UpdateSolution(Project, Version)
 	Dim CommandLine, VSSProject, VBProject, workingFolder, workFile, sourceFile, targetFile, strLine, renamedVBProject, Solution, Suffix
@@ -279,7 +287,7 @@ Private Function AlreadyRenamed(Project, Version, Suffix)
 	If Right(LCase(Mid(Project, 1, Len(Project) - Len(Suffix))), Len(Version)) = LCase(Version) Then AlreadyRenamed = True
 End Function
 Private Sub DoRename(Project, Version, Suffix)
-	Dim VBProject, renamedVBProject
+	Dim VBProject, renamedVBProject, sOutput
 
 	If AlreadyRenamed(Project, Version, Suffix) Then Exit Sub
 
@@ -291,7 +299,10 @@ Private Sub DoRename(Project, Version, Suffix)
 	'\\WSRV08\VSS\win32\SS RENAME "FiRRe.vbp" "FiRRe v4.6.vbp"
 	CommandLine = "RENAME " & Chr(34) & VBProject & Chr(34) & " " & Chr(34) & renamedVBProject & Chr(34)
 	LogMessage("         SS " & CommandLine & " -S")	'-S)mart mode - renaming the local copy after renaming the VSS master copy.
-	LogMessage("         " & ExecuteSS(CommandLine))
+	'LogMessage("         " & ExecuteSS(CommandLine))
+	sOutput = ExecuteSS(CommandLine)
+	if Trim(sOutput) <> vbNullString Then LogMessage("         " & sOutput)
+	sOutput = vbNullString
 End Sub
 Private Sub RenameProject(Project, Version)
 	Dim CommandLine, VBProject, Suffix
@@ -346,8 +357,9 @@ End If
 startFolder = WshShell.CurrentDirectory
 
 LogMessage("   Scanning " & DatabaseName & "...")
-'GetProjectFiles(RootProject & "/*.vbp")
+GetProjectFiles(RootProject & "/*.vbp")
 GetProjectFiles(RootProject & "/*.vbproj")
+'GetProjectFiles(RootProject & "/*.vbproj v4.2.vspscc")
 LogMessage("")
 LogMessage("   Renaming Projects...")
 If Not IsNull(ProjectList) Then
