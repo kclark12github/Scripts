@@ -235,6 +235,33 @@ Private Sub SetCurrentProject(Project)
 	if Trim(sOutput) <> vbNullString Then LogMessage("         " & sOutput)
 	sOutput = vbNullString
 End Sub
+Private Function Find(FilePath, SearchString)
+	Dim FileName, objStream, strLine, iLine, iPos
+	'Note that the SS FINDINFILES command was being used, but was found to be unreliable and was therefore replaced by
+	'this brute-force method...
+'	'Dim CommandLine
+'	CommandLine = "FINDINFILES " & Chr(34) & SearchString & "\" & Chr(34) & " " & Chr(34) & FilePath & " -I-"	'Note: Last "\" is doubled so as not to confuse it with and escaped-'"'
+'	Find = ExecuteSSwithoutOutput(CommandLine)
+	
+	Find = 0
+	FileName = Replace(Replace(FilePath, "$/", "V:\"), "/", "\")
+	If Not objFSO.FileExists(FileName) Then
+		LogMessage("         Error: " & FileName & " does not exist!")
+		Exit Function
+	End If
+	Set objStream = objFSO.OpenTextFile(FileName, ForReading, False)
+	iLine = 0
+	Do While (Not objStream.AtEndOfStream) And Find = 0
+		strLine = objStream.ReadLine
+		iLine = iLine + 1
+		iPos = InStr(strLine, SearchString)
+		If iPos > 0 Then 
+			'LogMessage("         Found(" & iLine & "): " & SearchString & " @ Column " & iPos)
+			Find = iLine
+		End If
+	Loop
+	objStream.Close
+End Function
 Private Sub UpdateProject(Project, Version)
 	Dim CommandLine, Product, VSSProject, ProjectFileName, workingFolder, workFile, sourceFile, targetFile, strLine, Suffix
 	Dim searchOutputPath, outputPath, searchHintPath, hintPath
@@ -251,14 +278,14 @@ Private Sub UpdateProject(Project, Version)
 	Select Case Product
 		Case "Components"
 			'We have to look for OutputPath property of the <Config> tag...
-			searchOutputPath = "FiRRe\program files\"
-			outputPath = "FiRRe " & Version & "\program files\"
+			searchOutputPath = "FiRRe\program files\SunGard\FiRRe\"
+			outputPath = "FiRRe " & Version & "\program files\SunGard\FiRRe " & Version & "\"
 			searchHintPath = vbNullString
 			hintPath = vbNullString
 		Case "FiRRe"
 			'We have to look for OutputPath property of the <Config> tag...
-			searchOutputPath = "FiRRe\program files\"
-			outputPath = "FiRRe " & Version & "\program files\"
+			searchOutputPath = "FiRRe\program files\SunGard\FiRRe\"
+			outputPath = "FiRRe " & Version & "\program files\SunGard\FiRRe " & Version & "\"
 			'We also have to look for Component folder references in the HintPath property of the <Reference> tag...
 			'Note that <Reference> tags contain relative paths...
 			searchHintPath = "..\..\..\Components\"
@@ -269,13 +296,9 @@ Private Sub UpdateProject(Project, Version)
 	End Select	
 	
 	'Before going any further, determine if we have anything to change...
-	'Note: Last "\" is doubled so as not to confuse it with and escaped-'"'
-	CommandLine = "FINDINFILES " & Chr(34) & searchOutputPath & "\" & Chr(34) & " " & Chr(34) & VSSProject & "/" & ProjectFileName & Chr(34) & " -I-" 
-	If ExecuteSSwithoutOutput(CommandLine) = 0 Then
+	If Find(VSSProject & "/" & ProjectFileName, searchOutputPath) = 0 Then
 		If hintPath = vbNullString Then Exit Sub
-		'Last "\" is doubled so as not to confuse it with and escaped-'"'
-		CommandLine = "FINDINFILES " & Chr(34) & searchHintPath & "\" & Chr(34) & " " & Chr(34) & VSSProject & "/" & ProjectFileName & Chr(34) & " -I-" 
-		If ExecuteSSwithoutOutput(CommandLine) = 0 Then Exit Sub
+		If Find(VSSProject & "/" & ProjectFileName, searchHintPath) = 0 Then Exit Sub
 	End If
 	
 	workingFolder = Replace(Replace(VSSProject, "$/", "V:\"), "/", "\")
@@ -287,7 +310,7 @@ Private Sub UpdateProject(Project, Version)
 	'Change the default project to our project (making command-line shorter, and required for CHECKOUT/IN operations)...
 	SetCurrentProject Project
 	'LogMessage("         CurrentDirectory: " & WshShell.CurrentDirectory)
-	CommandLine = "CHECKOUT " & Chr(34) & ProjectFileName & Chr(34) & " -I-"
+	CommandLine = "CHECKOUT " & Chr(34) & ProjectFileName & Chr(34) & " -I- -C"
 	LogMessage("         SS " & CommandLine)
 	LogMessage("         " & ExecuteSS(CommandLine))
 
@@ -332,19 +355,19 @@ Private Sub UpdateSolution(Project, Version)
 	ProjectFileName = Mid(renamedProjectFile, 1, Len(renamedProjectFile) - Len(" " & LCase(Version) & Suffix)) & Suffix	
 	
 	'Before going any further, determine if we have anything to change...
-	CommandLine = "FINDINFILES " & Chr(34) & ProjectFileName & Chr(34) & " " & Chr(34) & VSSProject & "/" & Solution & Chr(34) & " -I-" 
-	If ExecuteSSwithoutOutput(CommandLine) = 0 Then Exit Sub
+	If Find(VSSProject & "/" & Solution, ProjectFileName) = 0 Then Exit Sub
 	
 	workingFolder = Replace(Replace(VSSProject, "$/", "V:\"), "/", "\")
 	If Not objFSO.FolderExists(workingFolder) Then
 		LogMessage("         Error: Working Folder [assumed] """ & workingFolder & """ does not exist!")
 		Exit Sub
 	End If
+	If Not objFSO.FileExists(workingFolder & "\" & Solution) Then Exit Sub	
 	WshShell.CurrentDirectory = workingFolder
 	'Change the default project to our project (making command-line shorter, and required for CHECKOUT/IN operations)...
 	SetCurrentProject Project
 	'LogMessage("         CurrentDirectory: " & WshShell.CurrentDirectory)
-	CommandLine = "CHECKOUT " & Chr(34) & Solution & Chr(34) & " -I-"
+	CommandLine = "CHECKOUT " & Chr(34) & Solution & Chr(34) & " -I- -C"
 	LogMessage("         SS " & CommandLine)
 	LogMessage("         " & ExecuteSS(CommandLine))
 
@@ -387,14 +410,10 @@ Private Sub UpdateInstallShield(Project, Version, PriorVersion)
 	SccPath = RootProject & "/InstallShield"
 
 	'Before going any further, determine if we have anything to change...
-	CommandLine = "FINDINFILES " & Chr(34) & searchSccPath & Chr(34) & " " & Chr(34) & VSSProject & "/" & ProjectFileName & Chr(34) & " -I-"
-	If ExecuteSSwithoutOutput(CommandLine) = 0 Then
-		CommandLine = "FINDINFILES " & Chr(34) & "\" & PriorVersion & "<" & Chr(34) & " " & Chr(34) & VSSProject & "/" & ProjectFileName & Chr(34) & " -I-"
-		If ExecuteSSwithoutOutput(CommandLine) = 0 Then
-			CommandLine = "FINDINFILES " & Chr(34) & "\SunGard\" & Product & "<" & Chr(34) & " " & Chr(34) & VSSProject & "/" & ProjectFileName & Chr(34) & " -I-"
-			If ExecuteSSwithoutOutput(CommandLine) = 0 Then
-				CommandLine = "FINDINFILES " & Chr(34) & "\Projects\" & Product & "<" & Chr(34) & " " & Chr(34) & VSSProject & "/" & ProjectFileName & Chr(34) & " -I-"
-				If ExecuteSSwithoutOutput(CommandLine) = 0 Then Exit Sub
+	If Find(VSSProject & "/" & ProjectFileName, searchSccPath) = 0 Then
+		If Find(VSSProject & "/" & ProjectFileName, "\" & PriorVersion & "<") = 0 Then
+			If Find(VSSProject & "/" & ProjectFileName, "\SunGard\" & Product & "<") = 0 Then
+				If Find(VSSProject & "/" & ProjectFileName, "\Projects\" & Product & "<") = 0 Then Exit Sub
 			End If
 		End If
 	End If
@@ -408,7 +427,7 @@ Private Sub UpdateInstallShield(Project, Version, PriorVersion)
 	'Change the default project to our project (making command-line shorter, and required for CHECKOUT/IN operations)...
 	SetCurrentProject Project
 	'LogMessage("         CurrentDirectory: " & WshShell.CurrentDirectory)
-	CommandLine = "CHECKOUT " & Chr(34) & ProjectFileName & Chr(34) & " -I-"
+	CommandLine = "CHECKOUT " & Chr(34) & ProjectFileName & Chr(34) & " -I- -C"
 	LogMessage("         SS " & CommandLine)
 	LogMessage("         " & ExecuteSS(CommandLine))
 
@@ -423,7 +442,7 @@ Private Sub UpdateInstallShield(Project, Version, PriorVersion)
 	Do While Not sourceFile.AtEndOfStream
 		strLine = sourceFile.ReadLine
 		If Left(Trim(strLine), Len(vbTab & "<table name=""")) = vbTab & "<table name=""" Then TableName = Mid(Trim(strLine), Len(vbTab & "<table name=""")+1, Len(Trim(strLine))-Len(vbTab & "<table name=""")-2)
-		If Trim(strLine) = "</table>" Then TableName = vbNullString
+		If Trim(strLine) = vbTab & "</table>" Then TableName = vbNullString
 
 		'Note: We're not dealing with the Directory or related data in the Component table as these should be updated by 
 		'      InstallShield itself the first time the project is built after being renamed...
@@ -436,8 +455,8 @@ Private Sub UpdateInstallShield(Project, Version, PriorVersion)
 				If Left(Trim(strLine), Len(vbTab & vbTab & "<row><td>ComponentSource")) = vbTab & vbTab & "<row><td>ComponentSource" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "SunGard Shared\" & Version & "<")
 				searchString = "\SunGard\" & Product & "<"									'<row><td>AppServerFolder</td><td>\\WSRV08\SunGard\FiRRe</td><td/><td>2</td></row>
 				If Left(Trim(strLine), Len(vbTab & vbTab & "<row><td>AppServerFolder")) = vbTab & vbTab & "<row><td>AppServerFolder" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "\SunGard\" & Product & " " & Version & "<")
-				searchString = "<AppServerFolder>\program files\SunGard\" & Product & "<"	'<row><td>FiRReExePath</td><td><AppServerFolder>\program files\SunGard\FiRRe</td><td/><td>2</td></row>
-				If Left(Trim(strLine), Len(vbTab & vbTab & "<row><td>" & Product & "ExePath")) = vbTab & vbTab & "<row><td>" & Product & "ExePath" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "<AppServerFolder>\program files\SunGard\" & Product & " " & Version & "<")
+				searchString = "&lt;AppServerFolder&gt;\program files\SunGard\" & Product & "<"	'<row><td>FiRReExePath</td><td>&lt;AppServerFolder&gt;\program files\SunGard\FiRRe</td><td/><td>2</td></row>
+				If Left(Trim(strLine), Len(vbTab & vbTab & "<row><td>" & Product & "ExePath")) = vbTab & vbTab & "<row><td>" & Product & "ExePath" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "&lt;AppServerFolder&gt;\program files\SunGard\" & Product & " " & Version & "<")
 				searchString = "\Projects\" & Product & "<"									'<row><td>FiRReProject</td><td>\\WSRV08\Projects\FiRRe</td><td/><td>2</td></row>
 				If Left(Trim(strLine), Len(vbTab & vbTab & "<row><td>" & Product & "Project")) = vbTab & vbTab & "<row><td>" & Product & "Project" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "\Projects\" & Product & " Version " & mid(Version, 2) & "<")
 			Case "ISRelease"
@@ -454,6 +473,11 @@ Private Sub UpdateInstallShield(Project, Version, PriorVersion)
 				'If Left(Trim(strLine), Len(vbTab & vbTab & "<row><td>ProductName</td>")) = vbTab & vbTab & "<row><td>ProductName</td>" Then strLine = vbTab & vbTab & "<row><td>ProductName</td><td>" & Product & " Version " & mid(Version, 2) & ".0</td><td/></row>"
 				'<row><td>ProductVersion</td><td>4.3.65</td><td/></row>
 				'If Left(Trim(strLine), Len(vbTab & vbTab & "<row><td>ProductVersion</td>")) = vbTab & vbTab & "<row><td>ProductVersion</td>" Then strLine = vbTab & vbTab & "<row><td>ProductVersion</td><td>" & mid(Version, 2) & ".0</td><td/></row>"
+			Case "Registry"
+				searchString = "SOFTWARE\SunGard\" & Product & "<"									'<row><td>Registry1</td><td>2</td><td>SOFTWARE\SunGard\FiRRe</td><td/><td/><td>BNYMUATAppearance</td><td>0</td></row>
+				If InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "SOFTWARE\SunGard\" & Product & " " & Version & "<")
+				searchString = "SOFTWARE\SunGard\" & Product & " " & PriorVersion & "<"									'<row><td>Registry1</td><td>2</td><td>SOFTWARE\SunGard\FiRRe</td><td/><td/><td>BNYMUATAppearance</td><td>0</td></row>
+				If InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "SOFTWARE\SunGard\" & Product & " " & Version & "<")
 			Case "ISString"
 				searchString = "|" & Product & " " & PriorVersion & "<"						'<row><td>S_FiRRe_ShortLongName</td><td>1033</td><td>FIRREV~1.3|FiRRe v4.3</td><td>0</td><td/><td>-1801705073</td></row>
 				If Left(Trim(strLine), Len(vbTab & vbTab & "<row><td>S_" & Product & "_ShortLongName")) = vbTab & vbTab & "<row><td>S_" & Product & "_ShortLongName" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "|" & Product & " " & Version & "<")
@@ -513,7 +537,7 @@ Private Sub RenameProject(Project, Version, PriorVersion)
 			'Next, we must update path references in the .vbproj file to reflect the new version
 			'	Note: This is rather hard-coded for the FiRRe/Components relationship)...
 			UpdateProject Project, Version
-			'Lastly, we must CheckOut the solution and update any .vbproj references within to the newly renamed incarnation of the project...
+			'Lastly, we must update any .vbproj references within the solution file...
 			UpdateSolution Project, Version
 		Case ".ism"
 			'Rename the InstallShield project through SourceSafe...
