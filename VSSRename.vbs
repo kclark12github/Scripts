@@ -129,6 +129,23 @@ Public Sub CleanUp(FileName)
 		End If
     Next    
 End Sub
+Public Function Execute(Command)
+	Dim oExec, oStdOut, sOutput
+    'LogMessage("Executing: " & Command)
+	Set oExec = WshShell.Exec(Command)
+	Set oStdOut = oExec.StdOut
+	sOutput = ""
+    Do
+		WScript.Sleep 10
+		do until oStdOut.AtEndOfStream 
+			sOutput = sOutput & oStdOut.ReadAll
+		loop 
+	Loop Until oExec.Status <> 0 and oStdOut.AtEndOfStream
+	Execute = sOutput
+	sOutput = ""
+	Set oStdOut = Nothing
+	Set oExec = Nothing
+End Function
 Public Sub OpenSourceSafe(Database, User, Password)
 	Dim SCCServerPath, SSDIR
     SCCServerPath = vbNullString
@@ -151,7 +168,7 @@ Public Sub OpenSourceSafe(Database, User, Password)
 	End If
 
     BinFolder = Left(SCCServerPath, Len(SCCServerPath) - Len("\SSSCC.DLL"))
-    SS = Chr(34) & BinFolder & "\SS.exe" & Chr(34)	'"-Y" & UserName & "," & UserPassword & Chr(34)
+    SS = Chr(34) & BinFolder & "\SS.exe" & Chr(34) & " "	'"-Y" & UserName & "," & UserPassword & Chr(34)
     WshShell.Environment("PROCESS")("SSDIR") = SSDIR
 End Sub
 Public Sub GetProjectFiles(searchString)	'(Database, User, Password, Projects)
@@ -160,24 +177,9 @@ Public Sub GetProjectFiles(searchString)	'(Database, User, Password, Projects)
     TimeStamp = FormatTimeStamp(dtNow)
 
 	workFile = WshShell.ExpandEnvironmentStrings("%TEMP%") & "\VSSRename.work"
-    'CommandLine = "%comspec% /c " & Chr(34) & SSPath & Chr(34) & " DIR " & Chr(34) & "$/" & searchString & Chr(34) & " -R > " & Chr(34) & workFile & Chr(34)
-    'LogMessage("Executing: " & CommandLine)
-    'ExitCode = WshShell.Run(CommandLine, 7, bWaitOnReturn)
-
-	Dim oExec, oStdOut, sOutput
-    CommandLine = SS & " DIR " & Chr(34) & searchString & Chr(34) & " -R"
-    'LogMessage("Executing: " & CommandLine)
-	Set oExec = WshShell.Exec(CommandLine)
-	Set oStdOut = oExec.StdOut
-	sOutput = ""
-    Do
-		WScript.Sleep 10
-		do until oStdOut.AtEndOfStream 
-			sOutput = sOutput & oStdOut.ReadAll
-		loop 
-	Loop Until oExec.Status <> 0 and oStdOut.AtEndOfStream
 	Set objFile = objFSO.OpenTextFile(workFile, ForWriting, True)
-	objFile.WriteLine(sOutput)
+    CommandLine = SS & " DIR " & Chr(34) & searchString & Chr(34) & " -R"
+	objFile.WriteLine(Execute(CommandLine))
 	objFile.Close
 	
 	Dim vssProject, strLine
@@ -209,29 +211,48 @@ Public Sub GetProjectFiles(searchString)	'(Database, User, Password, Projects)
 	objFile.Delete
 	Set objFile = Nothing
 End Sub
-Public Sub DoRename(Database, User, Password, ProjectName, FileName, Version)
-    Const HKEY_CURRENT_USER = &H80000001
-    Const HKEY_LOCAL_MACHINE = &H80000002
-
-    dtNow = Now()
-    TimeStamp = FormatTimeStamp(dtNow)
-    SCCServerPath = vbNullString
-    VSSini = vbNullString
-
-    strComputer = "."
-    Set oReg=GetObject("winmgmts:{impersonationLevel=impersonate}!\\" & strComputer & "\root\default:StdRegProv")
-    oReg.GetStringValue HKEY_LOCAL_MACHINE, "SOFTWARE\Microsoft\SourceSafe", "SCCServerPath", SCCServerPath
-    oReg.GetStringValue HKEY_LOCAL_MACHINE, "SOFTWARE\Microsoft\SourceSafe\Databases", DatabaseName, VSSini
-
-    BinFolder = Left(SCCServerPath, Len(SCCServerPath) - Len("\SSSCC.DLL"))
-    SSPath = BinFolder & "\SS.exe"
-    BaseName = DatabaseName 
-    If Project <> vbNullString Then BaseName = BaseName & "." & Project
-    LogFile = BackupFolder & "\" & BaseName & "." & TimeStamp & ".log"
-    ArcFile = BackupFolder & "\" & BaseName & "." & TimeStamp & ".ssa"
-
-    CommandLine = """" & SSPath & """ -d- ""-s" & VSSini & """ ""-o" & LogFile & """ -i- -y" & Admin & "," & Password & " """ & ArcFile & """ $/" & Project
-    ExitCode = WshShell.Run(CommandLine, 8, True)
+Public Function GetSuffix(Project)
+	Dim iPos
+	iPos = InStrRev(Project, ".")
+	If iPos <> 0 Then
+		GetSuffix = LCase(Mid(Project, iPos))
+	Else
+		GetSuffix = vbNullString
+	End If
+End Function
+Public Function GetVBProject(Project)
+	Dim iPos
+	iPos = InStrRev(Project, "/")
+	If iPos <> 0 Then
+		GetVBProject = Mid(Project, iPos)
+	Else
+		GetVBProject = vbNullString
+	End If
+End Function
+Public Sub DoRename(Project, Version)
+	Dim CommandLine, VBProject, Suffix
+	
+	LogMessage("      " & Mid(Project, Len(RootProject)+2))
+	VBProject = GetVBProject(Project)
+	Suffix = GetSuffix(Project)
+	'First check to see if this project has already been renamed (and skip if so)...
+	If Right(LCase(Mid(Project, 1, Len(Project) - Len(Suffix))), Len(Version)) = LCase(Version) Then
+		'LogMessage("         Project already processed!")
+		Exit Sub
+	End If
+	
+	'\\WSRV08\VSS\win32\SS RENAME "$/Components Version 4.6/SIASRegisterDLLs/SIASRegisterDLLs.vbp" "$/Components Version 4.6/SIASRegisterDLLs/SIASRegisterDLLs v4.6.vbp"
+	CommandLine = "RENAME " & Chr(34) & Project & Chr(34) & " " & Chr(34) & Mid(Project, 1, Len(Project) - Len(Suffix)) & " " & LCase(Version) & Suffix & Chr(34)
+	LogMessage("         SS " & CommandLine)
+	'LogMessage("         " & Execute(CommandLine))
+	'Select Case Suffix
+'		Case ".vbp"
+'			If Right(LCase(Project), Len(" v4.6.vbp")) = " v4.6.vbp" Then
+'			End If
+'		Case ".vbproj"
+'			If Right(LCase(Project), Len(" v4.6.vbproj")) = " v4.6.vbproj" Then
+'			End If
+'	End Select
 End Sub
 Private Sub DisplayHelp
     LogMessage "Usage:"
@@ -265,9 +286,13 @@ End If
 LogMessage("   Scanning " & DatabaseName & "...")
 GetProjectFiles(RootProject & "/*.vbp")
 GetProjectFiles(RootProject & "/*.vbproj")
+LogMessage("")
+LogMessage("   Renaming Projects...")
 If Not IsNull(ProjectList) Then
 	For i = 1 To UBound(ProjectList)
-		LogMessage("ProjectList(" & i & "): " & ProjectList(i))
+		'LogMessage("ProjectList(" & i & "): " & ProjectList(i))
+		'LogMessage("   Suffix: " & GetSuffix(ProjectList(i)))
+		DoRename ProjectList(i), Version
 	Next
 End If
 
