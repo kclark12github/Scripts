@@ -20,6 +20,12 @@
 '   04/18/08    Ken Clark       Updated AltBackupFolder to be registry-based like BackupFolder;
 '   03/21/06    Ken Clark		Created;
 '=================================================================================================================================
+'Environment Variables:
+'	SharedDocuments		- Shared Documents folder path
+'	AltSharedDocuments	- Secondary Shared Documents folder path
+'	BackupFolder		- Target Backup folder path
+'	AltBackupFolder		- Secondary Target Backup folder path
+'=================================================================================================================================
 'Ntbackup
 'Perform backup operations at a command prompt or from a batch file using the ntbackup command followed by various parameters.
 '
@@ -530,6 +536,7 @@ Dim iJob, totalJobs, TestMode
 
 TestMode = False
 SharedDocuments = GetEnvironmentVariable("SharedDocuments")
+AltSharedDocuments = GetEnvironmentVariable("AltSharedDocuments")
 BackupFolder = GetEnvironmentVariable("BackupFolder")
 AltBackupFolder = GetEnvironmentVariable("AltBackupFolder")
 
@@ -571,7 +578,7 @@ Else
     End Select
 
     iJob = 1
-    DoBackup "@" & SharedDocuments & "\SystemState.bks",                BackupFolder & "\SystemState.bkf",                          "SystemState",                       "SystemState Backup",              iJob, totalJobs:    iJob = iJob + 1
+    DoBackup "@" & AltSharedDocuments & "\SystemState.bks",             BackupFolder & "\SystemState.bkf",                          "SystemState",                       "SystemState Backup",              iJob, totalJobs:    iJob = iJob + 1
     DoBackup SharedDocuments & "\Finance",                              BackupFolder & "\Shared Documents - Finance.bkf",           "Shared Documents - Finance",        "Shared Documents - Finance",      iJob, totalJobs:    iJob = iJob + 1
     Select Case WeekDayName(WeekDay(Date))
         Case "Sunday"
@@ -617,20 +624,20 @@ Else
             'DoBackup SharedDocuments & "\Game Images",                  AltBackupFolder & "\Shared Documents - Game Images.bkf",    "Game Images",    "Game Images",                                        iJob, totalJobs:    iJob = iJob + 1
             'DoBackup SharedDocuments & "\Software Images",              AltBackupFolder & "\Shared Documents - Software Images.bkf","Software Images","Software Images",                                    iJob, totalJobs:    iJob = iJob + 1
         Case "Tuesday"
-            DoBackup "@" & SharedDocuments & "\My Profile.bks",         BackupFolder & "\My Profile.bkf",                           "My Profile",                       "My Profile",                       iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "C:\Documents and Settings\kclark\My Documents",   BackupFolder & "\GZPR141 My Documents.bkf",                 "GZPR141 My Documents",             "GZPR141 My Documents",             iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\SharedDocuments.bks",    BackupFolder & "\Shared Documents.bkf",                     "Shared Documents",                 "Shared Documents",                 iJob, totalJobs:    iJob = iJob + 1
-            DoBackup SharedDocuments & "\Downloads\Controls",           BackupFolder & "\Downloads - Controls.bkf",					"Downloads - Controls",				"Downloads - Controls",             iJob, totalJobs:    iJob = iJob + 1
-            DoBackup SharedDocuments & "\Downloads\Games",              BackupFolder & "\Downloads - Games.bkf",					"Downloads - Games",				"Downloads - Games",                iJob, totalJobs:    iJob = iJob + 1
-            DoBackup SharedDocuments & "\Downloads\Hardware",           BackupFolder & "\Downloads - Hardware.bkf",					"Downloads - Hardware",				"Downloads - Hardware",             iJob, totalJobs:    iJob = iJob + 1
-            DoBackup SharedDocuments & "\Downloads\Personal Finance",   BackupFolder & "\Downloads - Personal Finance.bkf",         "Downloads - Personal Finance",		"Downloads - Personal Finance",     iJob, totalJobs:    iJob = iJob + 1
-            DoBackup SharedDocuments & "\Downloads\SunGard",            BackupFolder & "\Downloads - SunGard.bkf",					"Downloads - SunGard",				"Downloads - SunGard",              iJob, totalJobs:    iJob = iJob + 1
-            DoBackup SharedDocuments & "\Downloads\Tools - Development",BackupFolder & "\Downloads - Tools - Development.bkf",      "Downloads - Tools(Development)",	"Downloads - Tools(Development)",   iJob, totalJobs:    iJob = iJob + 1
-            DoBackup SharedDocuments & "\Downloads\Tools - Music",      BackupFolder & "\Downloads - Tools - Music.bkf",			"Downloads - Tools(Music)",			"Downloads - Tools(Music)",         iJob, totalJobs:    iJob = iJob + 1
-            DoBackup SharedDocuments & "\Downloads\Tools - PC",         BackupFolder & "\Downloads - Tools - PC.bkf",				"Downloads - Tools(PC)",			"Downloads - Tools(PC)",            iJob, totalJobs:    iJob = iJob + 1
-            DoBackup SharedDocuments & "\Downloads\Tools - Publishing", BackupFolder & "\Downloads - Tools - Publishing.bkf",       "Downloads - Tools(Publishing)",	"Downloads - Tools(Publishing)",    iJob, totalJobs:    iJob = iJob + 1
-            DoBackup SharedDocuments & "\Downloads\Tools - Web",        BackupFolder & "\Downloads - Tools - Web.bkf",				"Downloads - Tools(Web)",			"Downloads - Tools(Web)",           iJob, totalJobs:    iJob = iJob + 1
-            DoBackup SharedDocuments & "\Downloads\Web Downloads",      BackupFolder & "\Downloads - Web Downloads.bkf",			"Downloads - Web Downloads",		"Downloads - Web Downloads",        iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "@" & AltSharedDocuments & "\My Profile.bks",         BackupFolder & "\My Profile.bkf",                           "My Profile",                       "My Profile",                       iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "C:\Documents and Settings\kclark\My Documents",      BackupFolder & "\GZPR141 My Documents.bkf",                 "GZPR141 My Documents",             "GZPR141 My Documents",             iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "@" & AltSharedDocuments & "\SharedDocuments.bks",	   BackupFolder & "\Shared Documents.bkf",                     "Shared Documents",                 "Shared Documents",                 iJob, totalJobs:    iJob = iJob + 1
+            DoBackup AltSharedDocuments & "\Downloads\Controls",           BackupFolder & "\Downloads - Controls.bkf",					"Downloads - Controls",				"Downloads - Controls",             iJob, totalJobs:    iJob = iJob + 1
+            DoBackup AltSharedDocuments & "\Downloads\Games",              BackupFolder & "\Downloads - Games.bkf",					"Downloads - Games",				"Downloads - Games",                iJob, totalJobs:    iJob = iJob + 1
+            DoBackup AltSharedDocuments & "\Downloads\Hardware",           BackupFolder & "\Downloads - Hardware.bkf",					"Downloads - Hardware",				"Downloads - Hardware",             iJob, totalJobs:    iJob = iJob + 1
+            DoBackup AltSharedDocuments & "\Downloads\Personal Finance",   BackupFolder & "\Downloads - Personal Finance.bkf",         "Downloads - Personal Finance",		"Downloads - Personal Finance",     iJob, totalJobs:    iJob = iJob + 1
+            DoBackup AltSharedDocuments & "\Downloads\SunGard",            BackupFolder & "\Downloads - SunGard.bkf",					"Downloads - SunGard",				"Downloads - SunGard",              iJob, totalJobs:    iJob = iJob + 1
+            DoBackup AltSharedDocuments & "\Downloads\Tools - Development",BackupFolder & "\Downloads - Tools - Development.bkf",      "Downloads - Tools(Development)",	"Downloads - Tools(Development)",   iJob, totalJobs:    iJob = iJob + 1
+            DoBackup AltSharedDocuments & "\Downloads\Tools - Music",      BackupFolder & "\Downloads - Tools - Music.bkf",			"Downloads - Tools(Music)",			"Downloads - Tools(Music)",         iJob, totalJobs:    iJob = iJob + 1
+            DoBackup AltSharedDocuments & "\Downloads\Tools - PC",         BackupFolder & "\Downloads - Tools - PC.bkf",				"Downloads - Tools(PC)",			"Downloads - Tools(PC)",            iJob, totalJobs:    iJob = iJob + 1
+            DoBackup AltSharedDocuments & "\Downloads\Tools - Publishing", BackupFolder & "\Downloads - Tools - Publishing.bkf",       "Downloads - Tools(Publishing)",	"Downloads - Tools(Publishing)",    iJob, totalJobs:    iJob = iJob + 1
+            DoBackup AltSharedDocuments & "\Downloads\Tools - Web",        BackupFolder & "\Downloads - Tools - Web.bkf",				"Downloads - Tools(Web)",			"Downloads - Tools(Web)",           iJob, totalJobs:    iJob = iJob + 1
+            DoBackup AltSharedDocuments & "\Downloads\Web Downloads",      BackupFolder & "\Downloads - Web Downloads.bkf",			"Downloads - Web Downloads",		"Downloads - Web Downloads",        iJob, totalJobs:    iJob = iJob + 1
         Case "Wednesday"
             DoBackup "C:\WebShare\wwwroot",                             BackupFolder & "\WebShare - wwwroot.bkf",                   "WebShare - wwwroot",                "WebShare - wwwroot",              iJob, totalJobs:    iJob = iJob + 1
             DoBackup "C:\WebShare\wwwArchive",                          BackupFolder & "\WebShare - wwwArchive.bkf",                "WebShare - wwwArchive",             "WebShare - wwwArchive",           iJob, totalJobs:    iJob = iJob + 1
