@@ -174,10 +174,29 @@ Public Sub DoBackup(bks, FileName, JobName, Description)
 		If Success And ExitCode = 0 Then CleanUp(FileName)
     End If
 End Sub
-'Script can be debugged by opening a CMD window and executing the following command (note that the two slashes are not a typo...
+'Script can be debugged by opening a CMD window and executing the following command (note that the two slashes are not a typo)...
 '	cscript Backup.vbs //X
 
 SharedDocuments = GetEnvironmentVariable("SharedDocuments")
 BackupFolder = GetEnvironmentVariable("BackupFolder")
-DoBackup SharedDocuments & "\Finance",   BackupFolder & "\Shared Documents - Finance.bkf",   "Shared Documents - Finance",   "Full NT Backup of Shared Documents - Finance"
-DoBackup SharedDocuments & "\Favorites", BackupFolder & "\Shared Documents - Favorites.bkf", "Shared Documents - Favorites", "Full NT Backup of Shared Documents - Favorites"
+AltBackupFolder = "E" & Mid(BackupFolder, 2)
+
+'Every Day...
+'DoBackup "@" & SharedDocuments & "\SystemState.bks",        BackupFolder & "\SystemState.bkf",                          "SystemState",                          "SystemState Backup"
+'DoBackup SharedDocuments & "\Finance",                      BackupFolder & "\Shared Documents - Finance.bkf",           "Shared Documents - Finance",           "Full NT Backup of Shared Documents - Finance"
+
+DoBackup "C:\Documents and Settings\kclark\My Documents",   BackupFolder & "\GZPR141 My Documents.bkf",                 "GZPR141 My Documents",                 "Full NT Backup of GZPR141 My Documents"
+DoBackup "@" & SharedDocuments & "\My Profile.bks",         BackupFolder & "\My Profile.bkf",                           "My Profile",                           "Full NT Backup of My Profile"
+DoBackup "C:\Projects",                                     BackupFolder & "\Projects.bkf",                             "Projects",                             "Full NT Backup of Projects"
+DoBackup "@" & SharedDocuments & "\SharedDocuments.bks",    BackupFolder & "\Shared Documents.bkf",                     "Shared Documents",                     "Full NT Backup of Shared Documents"
+DoBackup SharedDocuments & "\Downloads",                    BackupFolder & "\Shared Documents - Downloads.bkf",         "Shared Documents - Downloads",         "Full NT Backup of Shared Documents - Downloads"
+'DoBackup SharedDocuments & "\My Pictures",                  BackupFolder & "\Shared Documents - My Pictures.bkf",       "Shared Documents - My Pictures",       "Full NT Backup of Shared Documents - My Pictures"
+DoBackup "C:\WebShare\wwwArchive",                          BackupFolder & "\WebShare - wwwArchive.bkf",                "WebShare - wwwArchive",                "Full NT Backup of WebShare - wwwArchive"
+'DoBackup "C:\WebShare\wwwroot",                             BackupFolder & "\WebShare - wwwroot.bkf",                   "WebShare - wwwroot",                   "Full NT Backup of WebShare - wwwroot"
+
+'DoBackup SharedDocuments & "\My Music",                     AltBackupFolder & "\Shared Documents - My Music.bkf",          "Shared Documents - My Music",          "Full NT Backup of Shared Documents - My Music"
+'DoBackup SharedDocuments & "\Game Images",                  AltBackupFolder & "\Shared Documents - Game Images.bkf",       "Shared Documents - Game Images",       "Full NT Backup of Shared Documents - Game Images"
+'DoBackup SharedDocuments & "\Software Images",              AltBackupFolder & "\Shared Documents - Software Images.bkf",   "Shared Documents - Software Images",   "Full NT Backup of Shared Documents - Software Images"
+
+'Remote Machine...
+''DoBackup "\\EUKB6\My Documents",                            BackupFolder & "\EUKB6 My Documents.bkf",                   "EUKB6 My Documents",                   "Full NT Backup of EUKB6 My Documents"
