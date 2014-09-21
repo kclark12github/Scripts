@@ -82,7 +82,7 @@ Public Function GetEnvironmentVariable(VariableName)
 	    Exit Function
 	Next
 End Function
-Public Function GetLogFile(StartTimeStamp)
+Public Function GetLogFile(StartTimeStamp, MyJobName)
     Const LOCAL_APPLICATION_DATA = &H1c&
     Const HKEY_CURRENT_USER = &H80000001
     Const HKEY_LOCAL_MACHINE = &H80000002
@@ -102,7 +102,7 @@ Public Function GetLogFile(StartTimeStamp)
     For Each subkey In arrSubKeys
         oReg.GetStringValue HKEY_CURRENT_USER, "Software\Microsoft\Ntbackup\Log Files\" & subkey, "Job Name", JobName
         oReg.GetDWORDValue HKEY_CURRENT_USER, "Software\Microsoft\Ntbackup\Log Files\" & subkey, "Date/Time Used", DateTimeUsed
-        If DateTimeUsed > StartTimeStamp Then
+        If DateTimeUsed > StartTimeStamp Or UCase(JobName) = UCase(MyJobName) Then
             Set objAppShell = CreateObject("Shell.Application")
             Set objFolder = objAppShell.Namespace(LOCAL_APPLICATION_DATA)
             Set objFolderItem = objFolder.Self
@@ -128,7 +128,7 @@ Public Sub CleanUp(FileName)
     Set objBKF = objFSO.GetFile(FileName)
     BaseName = objBKF.ParentFolder & "\" & objFSO.GetBaseName(objBKF) & "."
     BackupName = Mid(BaseName, 1, Len(BaseName) - Len("yyyyMMdd-HHmmss."))
-    SQLSource = "Select * from CIM_DataFile where Path='\\" & Replace(Mid(objBKF.ParentFolder, 4), "\", "\\") & "\\'")
+    SQLSource = "Select * from CIM_DataFile where Path='\\" & Replace(Mid(objBKF.ParentFolder, 4), "\", "\\") & "\\'"
     Set colFiles = objWMIService.ExecQuery(SQLSource, "WQL", wbemFlagReturnImmediately + wbemFlagForwardOnly)
     For Each objFile in colFiles
 		If Left(objFile.Name, Len(BackupName)) = LCase(BackupName) And Left(objFile.Name, Len(BaseName)) <> LCase(BaseName) Then 
@@ -157,7 +157,7 @@ Public Sub DoBackup(bks, FileName, JobName, Description)
     'MsgBox("CommandLine: " & CommandLine)
     ExitCode = objShell.Run("cmd /c " & CommandLine, 8, True)
 
-    SourceLog = GetLogFile(StartTimeStamp)
+    SourceLog = GetLogFile(StartTimeStamp, JobName)
     If SourceLog <> vbNullString Then
 		Set objFile = objFSO.GetFile(FileName)
 		TargetLog = objFile.ParentFolder & "\" & objFSO.GetBaseName(objFile) & ".log"
