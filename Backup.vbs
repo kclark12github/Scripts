@@ -468,7 +468,9 @@ Public Sub DoBackup(bks, FileName, JobName, Description, iJob, totalJobs)
 	Set objShell = Nothing
 End Sub
 'Script can be debugged by opening a CMD window and executing the following command (note that the two slashes are not a typo)...
-'	cscript Backup.vbs //X
+'	cscript//X Backup.vbs
+'or... (Note that arguments are enclosed in double-quotes due to embedded spaces, and arguments are separated by spaces - not commas)
+'	cscript//X Backup.vbs "@C:\Documents and Settings\All Users\Documents\My Music - Rock - Rolling Stones.bks" "D:\Backups\GZPR141\My Music - Rock - Rolling Stones, The.bkf" "My Music - Rolling Stones, The" "My Music - Rolling Stones, The"
 Dim vArg, aArgs(), iCount
 Dim SharedDocuments, BackupFolder, AltBackupFolder
 Dim iJob, totalJobs
@@ -527,40 +529,40 @@ Else
     Select Case WeekDayName(WeekDay(Date))
         Case "Sunday"
         Case "Monday"
-			'DoBackup bks,																	FileName,														JobName,							Description,						iJob, totalJobs
+			'DoBackup bks (can't contain commas),											FileName,														JobName,							Description,						iJob, totalJobs
             'DoBackup SharedDocuments & "\My Music",										AltBackupFolder & "\Shared Documents - My Music.bkf",			"My Music",							"My Music",							iJob, totalJobs:    iJob = iJob + 1
 			DoBackup "@" & SharedDocuments & "\My Music - Rock - Asia.bks",					AltBackupFolder & "\My Music - Rock - Asia.bkf",				"My Music - Asia",					"My Music - Asia",					iJob, totalJobs:    iJob = iJob + 1
-			DoBackup "@" & SharedDocuments & "\My Music - Rock - Beatles, The.bks",			AltBackupFolder & "\My Music - Rock - Beatles, The.bkf",		"My Music - Beatles, The",			"My Music - Beatles, The",			iJob, totalJobs:    iJob = iJob + 1
+			DoBackup "@" & SharedDocuments & "\My Music - Rock - Beatles.bks",				AltBackupFolder & "\My Music - Rock - Beatles, The.bkf",		"My Music - Beatles, The",			"My Music - Beatles, The",			iJob, totalJobs:    iJob = iJob + 1
 			DoBackup "@" & SharedDocuments & "\My Music - Rock - Blue Öyster Cult.bks",		AltBackupFolder & "\My Music - Rock - Blue Öyster Cult.bkf",	"My Music - Blue Öyster Cult",		"My Music - Blue Öyster Cult",		iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Browne, Jackson.bks",		AltBackupFolder & "\My Music - Rock - Browne, Jackson.bkf",		"My Music - Browne, Jackson",		"My Music - Browne, Jackson",		iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Buffett, Jimmy.bks",		AltBackupFolder & "\My Music - Rock - Buffett, Jimmy.bkf",		"My Music - Buffett, Jimmy",		"My Music - Buffett, Jimmy",		iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Clapton, Eric.bks",		AltBackupFolder & "\My Music - Rock - Clapton, Eric.bkf",		"My Music - Clapton, Eric",			"My Music - Clapton, Eric",			iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Cochrane, Tom.bks",		AltBackupFolder & "\My Music - Rock - Cochrane, Tom.bkf",		"My Music - Cochrane, Tom",			"My Music - Cochrane, Tom",			iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Browne Jackson.bks",		AltBackupFolder & "\My Music - Rock - Browne, Jackson.bkf",		"My Music - Browne, Jackson",		"My Music - Browne, Jackson",		iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Buffett Jimmy.bks",		AltBackupFolder & "\My Music - Rock - Buffett, Jimmy.bkf",		"My Music - Buffett, Jimmy",		"My Music - Buffett, Jimmy",		iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Clapton Eric.bks",			AltBackupFolder & "\My Music - Rock - Clapton, Eric.bkf",		"My Music - Clapton, Eric",			"My Music - Clapton, Eric",			iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Cochrane Tom.bks",			AltBackupFolder & "\My Music - Rock - Cochrane, Tom.bkf",		"My Music - Cochrane, Tom",			"My Music - Cochrane, Tom",			iJob, totalJobs:    iJob = iJob + 1
 			DoBackup "@" & SharedDocuments & "\My Music - Rock - Dire Straits.bks",			AltBackupFolder & "\My Music - Rock - Dire Straits.bkf",		"My Music - Dire Straits",			"My Music - Dire Straits",			iJob, totalJobs:    iJob = iJob + 1
             DoBackup "@" & SharedDocuments & "\My Music - Rock - Eagles.bks",				AltBackupFolder & "\My Music - Rock - Eagles.bkf",				"My Music - Eagles",				"My Music - Eagles",				iJob, totalJobs:    iJob = iJob + 1
             DoBackup "@" & SharedDocuments & "\My Music - Rock - ELO.bks",					AltBackupFolder & "\My Music - Rock - ELO.bkf",					"My Music - ELO",					"My Music - ELO",					iJob, totalJobs:    iJob = iJob + 1
             DoBackup "@" & SharedDocuments & "\My Music - Rock - Fleetwood Mac.bks",		AltBackupFolder & "\My Music - Rock - Fleetwood Mac.bkf",		"My Music - Fleetwood Mac",			"My Music - Fleetwood Mac",			iJob, totalJobs:    iJob = iJob + 1
-			DoBackup "@" & SharedDocuments & "\My Music - Rock - Gabriel, Peter.bks",		AltBackupFolder & "\My Music - Rock - Gabriel, Peter.bkf",		"My Music - Gabriel, Peter",		"My Music - Gabriel, Peter",		iJob, totalJobs:    iJob = iJob + 1
+			DoBackup "@" & SharedDocuments & "\My Music - Rock - Gabriel Peter.bks",		AltBackupFolder & "\My Music - Rock - Gabriel, Peter.bkf",		"My Music - Gabriel, Peter",		"My Music - Gabriel, Peter",		iJob, totalJobs:    iJob = iJob + 1
             DoBackup "@" & SharedDocuments & "\My Music - Rock - Genesis.bks",				AltBackupFolder & "\My Music - Rock - Genesis.bkf",				"My Music - Genesis",				"My Music - Genesis",				iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Joel, Billy.bks",			AltBackupFolder & "\My Music - Rock - Joel, Billy.bkf",			"My Music - Joel, Billy"			"My Music - Joel, Billy",			iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - John, Elton.bks",			AltBackupFolder & "\My Music - Rock - John, Elton.bkf",			"My Music - John, Elton"			"My Music - John, Elton",			iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Joel Billy.bks",			AltBackupFolder & "\My Music - Rock - Joel, Billy.bkf",			"My Music - Joel, Billy",			"My Music - Joel, Billy",			iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - John Elton.bks",			AltBackupFolder & "\My Music - Rock - John, Elton.bkf",			"My Music - John, Elton",			"My Music - John, Elton",			iJob, totalJobs:    iJob = iJob + 1
 			DoBackup "@" & SharedDocuments & "\My Music - Rock - Journey.bks",				AltBackupFolder & "\My Music - Rock - Journey.bkf",				"My Music - Journey",				"My Music - Journey",				iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Kinks, The.bks",			AltBackupFolder & "\My Music - Rock - Kinks, The.bkf",			"My Music - Kinks, The",			"My Music - Kinks, The",			iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Kinks.bks",				AltBackupFolder & "\My Music - Rock - Kinks, The.bkf",			"My Music - Kinks, The",			"My Music - Kinks, The",			iJob, totalJobs:    iJob = iJob + 1
 			DoBackup "@" & SharedDocuments & "\My Music - Rock - Led Zeppelin.bks",			AltBackupFolder & "\My Music - Rock - Led Zeppelin.bkf",		"My Music - Led Zeppelin",			"My Music - Led Zeppelin",			iJob, totalJobs:    iJob = iJob + 1
-			DoBackup "@" & SharedDocuments & "\My Music - Rock - McCartney, Paul.bks",		AltBackupFolder & "\My Music - Rock - McCartney, Paul.bkf",		"My Music - McCartney, Paul",		"My Music - McCartney, Paul",		iJob, totalJobs:    iJob = iJob + 1
-			DoBackup "@" & SharedDocuments & "\My Music - Rock - Moody Blues, The.bks",		AltBackupFolder & "\My Music - Rock - Moody Blues, The.bkf",	"My Music - Moody Blues, The",		"My Music - Moody Blues, The",		iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Parsons, Alan.bks",		AltBackupFolder & "\My Music - Rock - Parsons, Alan.bkf",		"My Music - Parsons, Alan",			"My Music - Parsons, Alan",			iJob, totalJobs:    iJob = iJob + 1
-			DoBackup "@" & SharedDocuments & "\My Music - Rock - Petty, Tom.bks",			AltBackupFolder & "\My Music - Rock - Petty, Tom.bkf",			"My Music - Petty, Tom",			"My Music - Petty, Tom",			iJob, totalJobs:    iJob = iJob + 1
+			DoBackup "@" & SharedDocuments & "\My Music - Rock - McCartney Paul.bks",		AltBackupFolder & "\My Music - Rock - McCartney, Paul.bkf",		"My Music - McCartney, Paul",		"My Music - McCartney, Paul",		iJob, totalJobs:    iJob = iJob + 1
+			DoBackup "@" & SharedDocuments & "\My Music - Rock - Moody Blues.bks",			AltBackupFolder & "\My Music - Rock - Moody Blues, The.bkf",	"My Music - Moody Blues, The",		"My Music - Moody Blues, The",		iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Parsons Alan.bks",			AltBackupFolder & "\My Music - Rock - Parsons, Alan.bkf",		"My Music - Parsons, Alan",			"My Music - Parsons, Alan",			iJob, totalJobs:    iJob = iJob + 1
+			DoBackup "@" & SharedDocuments & "\My Music - Rock - Petty Tom.bks",			AltBackupFolder & "\My Music - Rock - Petty, Tom.bkf",			"My Music - Petty, Tom",			"My Music - Petty, Tom",			iJob, totalJobs:    iJob = iJob + 1
             DoBackup "@" & SharedDocuments & "\My Music - Rock - Pink Floyd.bks",			AltBackupFolder & "\My Music - Rock - Pink Floyd.bkf",			"My Music - Pink Floyd",			"My Music - Pink Floyd",			iJob, totalJobs:    iJob = iJob + 1
             DoBackup "@" & SharedDocuments & "\My Music - Rock - Queen.bks",				AltBackupFolder & "\My Music - Rock - Queen.bkf",				"My Music - Queen",					"My Music - Queen",					iJob, totalJobs:    iJob = iJob + 1
-			DoBackup "@" & SharedDocuments & "\My Music - Rock - Rolling Stones, The.bks",	AltBackupFolder & "\My Music - Rock - Rolling Stones, The.bkf",	"My Music - Rolling Stones, The",	"My Music - Rolling Stones, The",	iJob, totalJobs:    iJob = iJob + 1
+			DoBackup "@" & SharedDocuments & "\My Music - Rock - Rolling Stones.bks",		AltBackupFolder & "\My Music - Rock - Rolling Stones, The.bkf",	"My Music - Rolling Stones, The",	"My Music - Rolling Stones, The",	iJob, totalJobs:    iJob = iJob + 1
             DoBackup "@" & SharedDocuments & "\My Music - Rock - Rush.bks",					AltBackupFolder & "\My Music - Rock - Rush.bkf",				"My Music - Rush",					"My Music - Rush",					iJob, totalJobs:    iJob = iJob + 1
-			DoBackup "@" & SharedDocuments & "\My Music - Rock - Seger, Bob.bks",			AltBackupFolder & "\My Music - Rock - Seger, Bob.bkf",			"My Music - Seger, Bob",			"My Music - Seger, Bob",			iJob, totalJobs:    iJob = iJob + 1
+			DoBackup "@" & SharedDocuments & "\My Music - Rock - Seger Bob.bks",			AltBackupFolder & "\My Music - Rock - Seger, Bob.bkf",			"My Music - Seger, Bob",			"My Music - Seger, Bob",			iJob, totalJobs:    iJob = iJob + 1
             DoBackup "@" & SharedDocuments & "\My Music - Rock - Styx.bks",					AltBackupFolder & "\My Music - Rock - Styx.bkf",				"My Music - Styx",					"My Music - Styx",					iJob, totalJobs:    iJob = iJob + 1
             DoBackup "@" & SharedDocuments & "\My Music - Rock - Supertramp.bks",			AltBackupFolder & "\My Music - Rock - Supertramp.bkf",			"My Music - Supertramp",			"My Music - Supertramp",            iJob, totalJobs:    iJob = iJob + 1
             DoBackup "@" & SharedDocuments & "\My Music - Rock - Various Artists.bks",		AltBackupFolder & "\My Music - Rock - Various Artists.bkf",		"My Music - Various Artists",		"My Music - Various Artists",		iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Walsh, Joe.bks",			AltBackupFolder & "\My Music - Rock - Walsh, Joe.bkf",			"My Music - Walsh, Joe",			"My Music - Walsh, Joe",			iJob, totalJobs:    iJob = iJob + 1
-			DoBackup "@" & SharedDocuments & "\My Music - Rock - Who, The.bks",				AltBackupFolder & "\My Music - Rock - Who, The.bkf",			"My Music - Who, The",				"My Music - Who, The",				iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Walsh Joe.bks",			AltBackupFolder & "\My Music - Rock - Walsh, Joe.bkf",			"My Music - Walsh, Joe",			"My Music - Walsh, Joe",			iJob, totalJobs:    iJob = iJob + 1
+			DoBackup "@" & SharedDocuments & "\My Music - Rock - Who.bks",					AltBackupFolder & "\My Music - Rock - Who, The.bkf",			"My Music - Who, The",				"My Music - Who, The",				iJob, totalJobs:    iJob = iJob + 1
             DoBackup "@" & SharedDocuments & "\My Music - Rock - Yes.bks",					AltBackupFolder & "\My Music - Rock - Yes.bkf",					"My Music - Yes",					"My Music - Yes",					iJob, totalJobs:    iJob = iJob + 1
             DoBackup "@" & SharedDocuments & "\My Music - Rock.bks",						AltBackupFolder & "\My Music - Rock.bkf",						"My Music - Rock",					"My Music - Rock",					iJob, totalJobs:    iJob = iJob + 1
             DoBackup "@" & SharedDocuments & "\My Music.bks",								AltBackupFolder & "\My Music.bkf",								"My Music",							"My Music",							iJob, totalJobs:    iJob = iJob + 1
