@@ -8,9 +8,9 @@
 '   08/13/10    Ken Clark		Created;
 '=================================================================================================================================
 'Notes:
-'Recommended Command-Line:	cscript VSSRename.vbs "WSRV08 VSS Database" "$/FiRRe Version 4.2"
+'Recommended Command-Line:	cscript VSSRename.vbs "WSRV08 VSS Database" "$/FiRRe Version 4.6" "4.5"
 'Script can be debugged by opening a CMD window and executing the following command (note that the two slashes are not a typo)...
-'	cscript//X VSSRename.vbs
+'	cscript//X VSSRename.vbs...
 '=================================================================================================================================
 Const HKEY_CURRENT_USER = &H80000001
 Const HKEY_LOCAL_MACHINE = &H80000002
@@ -422,44 +422,42 @@ Private Sub UpdateInstallShield(Project, Version, PriorVersion)
 	
 	Do While Not sourceFile.AtEndOfStream
 		strLine = sourceFile.ReadLine
-		If Left(Trim(strLine), Len("<table name=""")) = "<table name=""" Then TableName = Mid(Trim(strLine), Len("<table name=""")+1, Len(Trim(strLine))-Len("<table name=""")-2)
+		If Left(Trim(strLine), Len(vbTab & "<table name=""")) = vbTab & "<table name=""" Then TableName = Mid(Trim(strLine), Len(vbTab & "<table name=""")+1, Len(Trim(strLine))-Len(vbTab & "<table name=""")-2)
 		If Trim(strLine) = "</table>" Then TableName = vbNullString
 
 		'Note: We're not dealing with the Directory or related data in the Component table as these should be updated by 
 		'      InstallShield itself the first time the project is built after being renamed...
-		
-		If TableName = "InstallShield" Then
-			'<row><td>SccPath</td><td>"$/FiRRe/InstallShield", ESZAAAAA</td></row>
-			If InStr(strLine, "SccPath") > 0 Then strLine = Replace(strLine, searchSccPath, SccPath)
-		End If
-		If TableName = "ISPathVariable" Then
-			searchString = "SunGard Shared\" & PriorVersion & "<"						'<row><td>ComponentSource</td><td><AppServerFolder>\Common\SunGard Shared\v4.3</td><td/><td>2</td></row>
-			If Left(Trim(strLine), Len("<row><td>ComponentSource")) = "<row><td>ComponentSource" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "SunGard Shared\" & Version & "<")
-			searchString = "\SunGard\" & Product & "<"									'<row><td>AppServerFolder</td><td>\\WSRV08\SunGard\FiRRe</td><td/><td>2</td></row>
-			If Left(Trim(strLine), Len("<row><td>AppServerFolder")) = "<row><td>AppServerFolder" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "\SunGard\" & Product & " " & Version & "<")
-			searchString = "<AppServerFolder>\program files\SunGard\" & Product & "<"	'<row><td>FiRReExePath</td><td><AppServerFolder>\program files\SunGard\FiRRe</td><td/><td>2</td></row>
-			If Left(Trim(strLine), Len("<row><td>" & Product & "ExePath")) = "<row><td>" & Product & "ExePath" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "<AppServerFolder>\program files\SunGard\" & Product & " " & Version & "<")
-			searchString = "\Projects\" & Product & "<"									'<row><td>FiRReProject</td><td>\\WSRV08\Projects\FiRRe</td><td/><td>2</td></row>
-			If Left(Trim(strLine), Len("<row><td>" & Product & "Project")) = "<row><td>" & Product & "Project" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "\Projects\" & Product & " Version " & mid(Version, 2) & "<")
-		End If
-		If TableName = "ISRelease" Then
-			searchString = ">" & PriorVersion & "<"										'<row><td>v4.3</td><td>BNY</td><td>C:\InstallShield\FiRRe</td><td>FiRRe</td><td>1</td><td>1033</td><td>2</td><td>2</td><td>Intel</td><td/><td>1033</td><td>3</td><td>0</td><td>0</td><td>0</td><td/><td>0</td><td/><td>\\WSRV08\InstallShield\FiRRe\BNYMv4365</td><td/><td>http://</td><td/><td/><td/><td/><td>73741</td><td/><td/><td/><td/></row>
-			If Left(Trim(strLine), Len("<row><td>" & PriorVersion)) = "<row><td>" & PriorVersion And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, ">" & Version & "<")
-		End If
-		If TableName = "ISReleaseExtended" Then
-			searchString = ">" & PriorVersion & "<"										'<row><td>v4.3</td><td>BNY</td><td>0</td><td>http://</td><td>0</td><td>install</td><td>install</td><td>[WindowsFolder]Downloaded Installations</td><td>1</td><td>http://www.installengine.com/Msiengine20</td><td>http://www.installengine.com/Msiengine20</td><td>1</td><td>http://www.installengine.com/cert05/isengine</td><td/><td/><td/><td/><td>1</td><td>http://www.installengine.com/cert05/dotnetfx</td><td>1</td><td>1033</td><td/><td/><td/><td/><td>24</td><td>3</td><td>20</td><td/><td/></row>
-			If Left(Trim(strLine), Len("<row><td>" & PriorVersion)) = "<row><td>" & PriorVersion And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, ">" & Version & "<")
-		End If
-		If TableName = "Property" Then
-			'<row><td>ProductName</td><td>FiRRe Version 4.3.65</td><td/></row>
-			If Left(Trim(strLine), Len("<row><td>ProductName</td>")) = "<row><td>ProductName</td>" Then strLine = "<row><td>ProductName</td><td>" & Product & " Version " & mid(Version, 2) & ".0</td><td/></row>"
-			'<row><td>ProductVersion</td><td>4.3.65</td><td/></row>
-			If Left(Trim(strLine), Len("<row><td>ProductVersion</td>")) = "<row><td>ProductVersion</td>" Then strLine = "<row><td>ProductVersion</td><td>" & mid(Version, 2) & ".0</td><td/></row>"
-		End If
-		If TableName = "ISString" Then
-			searchString = "|" & Product & " " & PriorVersion & "<"						'<row><td>S_FiRRe_ShortLongName</td><td>1033</td><td>FIRREV~1.3|FiRRe v4.3</td><td>0</td><td/><td>-1801705073</td></row>
-			If Left(Trim(strLine), Len("<row><td>S_" & Product & "_ShortLongName")) = "<row><td>S_" & Product & "_ShortLongName" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "|" & Product & " " & Version & "<")
-		End If
+		Select Case TableName
+			Case "InstallShield"
+				'<row><td>SccPath</td><td>"$/FiRRe/InstallShield", ESZAAAAA</td></row>
+				If InStr(strLine, "SccPath") > 0 Then strLine = Replace(strLine, searchSccPath, SccPath)
+			Case "ISPathVariable"
+				searchString = "SunGard Shared\" & PriorVersion & "<"						'<row><td>ComponentSource</td><td><AppServerFolder>\Common\SunGard Shared\v4.3</td><td/><td>2</td></row>
+				If Left(Trim(strLine), Len(vbTab & vbTab & "<row><td>ComponentSource")) = vbTab & vbTab & "<row><td>ComponentSource" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "SunGard Shared\" & Version & "<")
+				searchString = "\SunGard\" & Product & "<"									'<row><td>AppServerFolder</td><td>\\WSRV08\SunGard\FiRRe</td><td/><td>2</td></row>
+				If Left(Trim(strLine), Len(vbTab & vbTab & "<row><td>AppServerFolder")) = vbTab & vbTab & "<row><td>AppServerFolder" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "\SunGard\" & Product & " " & Version & "<")
+				searchString = "<AppServerFolder>\program files\SunGard\" & Product & "<"	'<row><td>FiRReExePath</td><td><AppServerFolder>\program files\SunGard\FiRRe</td><td/><td>2</td></row>
+				If Left(Trim(strLine), Len(vbTab & vbTab & "<row><td>" & Product & "ExePath")) = vbTab & vbTab & "<row><td>" & Product & "ExePath" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "<AppServerFolder>\program files\SunGard\" & Product & " " & Version & "<")
+				searchString = "\Projects\" & Product & "<"									'<row><td>FiRReProject</td><td>\\WSRV08\Projects\FiRRe</td><td/><td>2</td></row>
+				If Left(Trim(strLine), Len(vbTab & vbTab & "<row><td>" & Product & "Project")) = vbTab & vbTab & "<row><td>" & Product & "Project" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "\Projects\" & Product & " Version " & mid(Version, 2) & "<")
+			Case "ISRelease"
+				searchString = ">" & PriorVersion & "<"										'<row><td>v4.3</td><td>BNY</td><td>C:\InstallShield\FiRRe</td><td>FiRRe</td><td>1</td><td>1033</td><td>2</td><td>2</td><td>Intel</td><td/><td>1033</td><td>3</td><td>0</td><td>0</td><td>0</td><td/><td>0</td><td/><td>\\WSRV08\InstallShield\FiRRe\BNYMv4365</td><td/><td>http://</td><td/><td/><td/><td/><td>73741</td><td/><td/><td/><td/></row>
+				If Left(Trim(strLine), Len(vbTab & vbTab & "<row><td>" & PriorVersion)) = vbTab & vbTab & "<row><td>" & PriorVersion And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, ">" & Version & "<")
+			Case "ISReleaseExtended"
+				searchString = ">" & PriorVersion & "<"										'<row><td>v4.3</td><td>BNY</td><td>0</td><td>http://</td><td>0</td><td>install</td><td>install</td><td>[WindowsFolder]Downloaded Installations</td><td>1</td><td>http://www.installengine.com/Msiengine20</td><td>http://www.installengine.com/Msiengine20</td><td>1</td><td>http://www.installengine.com/cert05/isengine</td><td/><td/><td/><td/><td>1</td><td>http://www.installengine.com/cert05/dotnetfx</td><td>1</td><td>1033</td><td/><td/><td/><td/><td>24</td><td>3</td><td>20</td><td/><td/></row>
+				If Left(Trim(strLine), Len(vbTab & vbTab & "<row><td>" & PriorVersion)) = vbTab & vbTab & "<row><td>" & PriorVersion And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, ">" & Version & "<")
+			Case "Property"
+				'Chances are by the time we freeze this version of software we will have already done a few InstallShield
+				'builds, so don't alter these version numbers. What's already here is probably correct...
+
+				'<row><td>ProductName</td><td>FiRRe Version 4.3.65</td><td/></row>
+				'If Left(Trim(strLine), Len(vbTab & vbTab & "<row><td>ProductName</td>")) = vbTab & vbTab & "<row><td>ProductName</td>" Then strLine = vbTab & vbTab & "<row><td>ProductName</td><td>" & Product & " Version " & mid(Version, 2) & ".0</td><td/></row>"
+				'<row><td>ProductVersion</td><td>4.3.65</td><td/></row>
+				'If Left(Trim(strLine), Len(vbTab & vbTab & "<row><td>ProductVersion</td>")) = vbTab & vbTab & "<row><td>ProductVersion</td>" Then strLine = vbTab & vbTab & "<row><td>ProductVersion</td><td>" & mid(Version, 2) & ".0</td><td/></row>"
+			Case "ISString"
+				searchString = "|" & Product & " " & PriorVersion & "<"						'<row><td>S_FiRRe_ShortLongName</td><td>1033</td><td>FIRREV~1.3|FiRRe v4.3</td><td>0</td><td/><td>-1801705073</td></row>
+				If Left(Trim(strLine), Len(vbTab & vbTab & "<row><td>S_" & Product & "_ShortLongName")) = vbTab & vbTab & "<row><td>S_" & Product & "_ShortLongName" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "|" & Product & " " & Version & "<")
+		End Select
 		targetFile.WriteLine(strLine)
 	Loop
 	sourceFile.Close
@@ -560,13 +558,11 @@ LogMessage("   Scanning " & DatabaseName & "...")
 GetProjectFiles(RootProject & "/*.vbp")
 GetProjectFiles(RootProject & "/*.vbproj")
 GetProjectFiles(RootProject & "/*.ism")
-'GetProjectFiles(RootProject & "/*.vbproj v4.2.vspscc")
 LogMessage("")
 LogMessage("   Renaming Projects...")
 If Not IsNull(ProjectList) Then
 	For i = 1 To UBound(ProjectList)
-		'LogMessage("ProjectList(" & i & "): " & ProjectList(i))
-		'LogMessage("   Suffix: " & GetSuffix(ProjectList(i)))
+		'LogMessage("      ProjectList(" & i & "): " & ProjectList(i))
 		RenameProject ProjectList(i), Version, PriorVersion
 	Next
 End If
