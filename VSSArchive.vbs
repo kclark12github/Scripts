@@ -84,7 +84,7 @@ End Sub
 '	cscript VSSArchive.vbs //X
 
 BackupFolder = GetEnvironmentVariable("BackupFolder")
-AltBackupFolder = "E" & Mid(BackupFolder, 2)
+AltBackupFolder = GetEnvironmentVariable("AltBackupFolder")
 DatabaseName = "Ken's Home VSS Database"
 Project = ""
 'Project = "VSSarchive.NET"	'for Testing...

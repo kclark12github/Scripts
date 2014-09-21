@@ -224,7 +224,7 @@ End Sub
 
 SharedDocuments = GetEnvironmentVariable("SharedDocuments")
 BackupFolder = GetEnvironmentVariable("BackupFolder")
-AltBackupFolder = "E" & Mid(BackupFolder, 2)
+AltBackupFolder = GetEnvironmentVariable("AltBackupFolder")
 
 'Every Day...
 DoBackup "@" & SharedDocuments & "\SystemState.bks",                BackupFolder & "\SystemState.bkf",                          "SystemState",                       "SystemState Backup"                                   '  5 minutes
