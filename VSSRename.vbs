@@ -21,7 +21,7 @@ Const ForAppending = 8
 Const UnicodeFormat = -1
 Const MB = 1048576
 Dim ProjectList(), iProject, startFolder
-Dim WshShell, objFSO, SS, DatabaseName, UserName, UserPassword, RootProject, Version, CurrentVSSProject
+Dim WshShell, objFSO, SS, DatabaseName, UserName, UserPassword, RootProject, Version, PriorVersion, CurrentVSSProject
 Set WshShell = CreateObject("WScript.Shell")
 Set objFSO = CreateObject("Scripting.FileSystemObject")
 ReDim ProjectList(0)
@@ -152,7 +152,7 @@ Private Sub GetProjectFiles(searchString)
 	Dim workFile
 	workFile = WshShell.ExpandEnvironmentStrings("%TEMP%") & "\VSSRename.work"
 	Set objFile = objFSO.OpenTextFile(workFile, ForWriting, True)
-    CommandLine = "DIR " & Chr(34) & searchString & Chr(34) & " -R"
+    CommandLine = "DIR " & Chr(34) & searchString & Chr(34) & " -I- -R"
 	objFile.WriteLine(ExecuteSS(CommandLine))
 	objFile.Close
 	
@@ -199,19 +199,28 @@ Private Function GetSuffix(Project)
 		GetSuffix = vbNullString
 	End If
 End Function
-Private Function GetVBProject(Project)
+Private Function GetProduct(Project)
+	Dim iPos
+	iPos = InStr(Project, " Version ")
+	If iPos <> 0 Then
+		GetProduct = Mid(Project, Len("$/")+1, iPos-(Len("$/")+1))
+	Else
+		GetProduct = vbNullString
+	End If
+End Function
+Private Function GetProjectFileName(Project)
 	Dim iPos
 	iPos = InStrRev(Project, "/")
 	If iPos <> 0 Then
-		GetVBProject = Mid(Project, iPos+1)
+		GetProjectFileName = Mid(Project, iPos+1)
 	Else
-		GetVBProject = vbNullString
+		GetProjectFileName = vbNullString
 	End If
 End Function
 Private Function GetVSSProject(Project)
-	Dim VBProject, VSSProject
-	VBProject = GetVBProject(Project)
-	VSSProject = Mid(Project, 1, Len(Project) - Len(VBProject) - 1)
+	Dim ProjectFileName, VSSProject
+	ProjectFileName = GetProjectFileName(Project)
+	VSSProject = Mid(Project, 1, Len(Project) - Len(ProjectFileName) - 1)
 	GetVSSProject = VSSProject
 End Function
 Private Sub SetCurrentProject(Project)
@@ -219,30 +228,111 @@ Private Sub SetCurrentProject(Project)
 	VSSProject = GetVSSProject(Project)
 	If VSSProject = CurrentVSSProject Then Exit Sub
 	
-	CommandLine = "CP " & Chr(34) & VSSProject & Chr(34)	'\\WSRV08\VSS\win32\SS CP "$/FiRRe Version 4.6"
+	CommandLine = "CP " & Chr(34) & VSSProject & Chr(34) & " -I-"	'\\WSRV08\VSS\win32\SS CP "$/FiRRe Version 4.6"
 	'LogMessage("         SS " & CommandLine)
 	'LogMessage("         " & ExecuteSS(CommandLine))
 	sOutput = ExecuteSS(CommandLine)
 	if Trim(sOutput) <> vbNullString Then LogMessage("         " & sOutput)
 	sOutput = vbNullString
 End Sub
-Private Sub UpdateSolution(Project, Version)
-	Dim CommandLine, VSSProject, VBProject, workingFolder, workFile, sourceFile, targetFile, strLine, renamedVBProject, Solution, Suffix
+Private Sub UpdateProject(Project, Version)
+	Dim CommandLine, Product, VSSProject, ProjectFileName, workingFolder, workFile, sourceFile, targetFile, strLine, Suffix
+	Dim searchOutputPath, outputPath, searchHintPath, hintPath
+	'Project:											'$/FiRRe Version 4.6/FiRRe v4.6.vbproj
+	'Version:											'v4.6
+	Product = GetProduct(Project)						'FiRRe
+	VSSProject = GetVSSProject(Project)					'$/FiRRe Version 4.6
+	ProjectFileName = GetProjectFileName(Project)		'FiRRe v4.6.vbproj
+	Suffix = GetSuffix(Project)							'.vbproj
 	
-	VSSProject = GetVSSProject(Project)					'$/FiRRe Version 4.6/FiRRe.vbproj
-	VBProject = GetVBProject(Project)
-	Suffix = GetSuffix(Project)
-	If AlreadyRenamed(Project, Version, Suffix) Then	'$/FiRRe Version 4.6/FiRRe v4.6.vbproj
-		renamedVBProject = VBProject
-	Else												'$/FiRRe Version 4.6/FiRRe.vbproj
-		renamedVBProject = Mid(VBProject, 1, Len(VBProject) - Len(Suffix)) & " " & LCase(Version) & Suffix
-	End If
-	Solution = Replace(renamedVBProject, ".vbproj", ".sln")	'Will always be already renamed...
-	'Take the version off. This is what we'll search the solution for...
-	VBProject = Mid(renamedVBProject, 1, Len(renamedVBProject) - Len(" " & LCase(Version) & Suffix)) & Suffix	
+	If Not AlreadyRenamed(Project, Version, Suffix) Then ProjectFileName = Mid(ProjectFileName, 1, Len(ProjectFileName) - Len(Suffix)) & " " & LCase(Version) & Suffix	'FiRRe v4.6.vbproj
+	
+	'What are we looking for...?
+	Select Case Product
+		Case "Components"
+			'We have to look for OutputPath property of the <Config> tag...
+			searchOutputPath = "FiRRe\program files\"
+			outputPath = "FiRRe " & Version & "\program files\"
+			searchHintPath = vbNullString
+			hintPath = vbNullString
+		Case "FiRRe"
+			'We have to look for OutputPath property of the <Config> tag...
+			searchOutputPath = "FiRRe\program files\"
+			outputPath = "FiRRe " & Version & "\program files\"
+			'We also have to look for Component folder references in the HintPath property of the <Reference> tag...
+			'Note that <Reference> tags contain relative paths...
+			searchHintPath = "..\..\..\Components\"
+			hintPath = "..\..\..\Components Version " & Mid(Version, 2) & "\"
+		Case Else
+			LogMessage("         Error: Unexpected Product (" & Product & "); Project not updated!")
+			Exit Sub
+	End Select	
 	
 	'Before going any further, determine if we have anything to change...
-	CommandLine = "FINDINFILES " & Chr(34) & VBProject & Chr(34) & " " & Chr(34) & VSSProject & "/" & Solution & Chr(34) 
+	'Note: Last "\" is doubled so as not to confuse it with and escaped-'"'
+	CommandLine = "FINDINFILES " & Chr(34) & searchOutputPath & "\" & Chr(34) & " " & Chr(34) & VSSProject & "/" & ProjectFileName & Chr(34) & " -I-" 
+	If ExecuteSSwithoutOutput(CommandLine) = 0 Then
+		If hintPath = vbNullString Then Exit Sub
+		'Last "\" is doubled so as not to confuse it with and escaped-'"'
+		CommandLine = "FINDINFILES " & Chr(34) & searchHintPath & "\" & Chr(34) & " " & Chr(34) & VSSProject & "/" & ProjectFileName & Chr(34) & " -I-" 
+		If ExecuteSSwithoutOutput(CommandLine) = 0 Then Exit Sub
+	End If
+	
+	workingFolder = Replace(Replace(VSSProject, "$/", "V:\"), "/", "\")
+	If Not objFSO.FolderExists(workingFolder) Then
+		LogMessage("         Error: Working Folder [assumed] """ & workingFolder & """ does not exist! Get latest version of project and run this utility again.")
+		Exit Sub
+	End If
+	WshShell.CurrentDirectory = workingFolder
+	'Change the default project to our project (making command-line shorter, and required for CHECKOUT/IN operations)...
+	SetCurrentProject Project
+	'LogMessage("         CurrentDirectory: " & WshShell.CurrentDirectory)
+	CommandLine = "CHECKOUT " & Chr(34) & ProjectFileName & Chr(34) & " -I-"
+	LogMessage("         SS " & CommandLine)
+	LogMessage("         " & ExecuteSS(CommandLine))
+
+	LogMessage("         Updating " & ProjectFileName & "...")
+	Set sourceFile = objFSO.OpenTextFile(ProjectFileName, ForReading, False)
+	workFile = WshShell.ExpandEnvironmentStrings("%TEMP%") & "\VSSRename.work"
+	Set targetFile = objFSO.OpenTextFile(workFile, ForWriting, True)
+	Do While Not sourceFile.AtEndOfStream
+		strLine = sourceFile.ReadLine
+		
+		If InStr(strLine, searchOutputPath) > 0 Then strLine = Replace(strLine, searchOutputPath, outputPath)
+		If hintPath <> vbNullString Then
+			If InStr(strLine, searchHintPath) > 0 Then strLine = Replace(strLine, searchHintPath, hintPath)
+		End If
+		targetFile.WriteLine(strLine)
+	Loop
+	sourceFile.Close
+	targetFile.Close
+
+	Set sourceFile = objFSO.GetFile(ProjectFileName)
+	sourceFile.Delete
+	Set sourceFile = Nothing
+	objFSO.MoveFile workFile, ProjectFileName
+
+	CommandLine = "CHECKIN " & Chr(34) & ProjectFileName & Chr(34) & " -I- -C""VSSRename automated version update."""
+	LogMessage("         SS " & CommandLine)
+	LogMessage("         " & ExecuteSS(CommandLine))
+End Sub
+Private Sub UpdateSolution(Project, Version)
+	Dim CommandLine, VSSProject, ProjectFileName, workingFolder, workFile, sourceFile, targetFile, strLine, renamedProjectFile, Solution, Suffix
+	
+	VSSProject = GetVSSProject(Project)					'$/FiRRe Version 4.6/FiRRe.vbproj
+	ProjectFileName = GetProjectFileName(Project)
+	Suffix = GetSuffix(Project)
+	If AlreadyRenamed(Project, Version, Suffix) Then	'$/FiRRe Version 4.6/FiRRe v4.6.vbproj
+		renamedProjectFile = ProjectFileName
+	Else												'$/FiRRe Version 4.6/FiRRe.vbproj
+		renamedProjectFile = Mid(ProjectFileName, 1, Len(ProjectFileName) - Len(Suffix)) & " " & LCase(Version) & Suffix
+	End If
+	Solution = Replace(renamedProjectFile, ".vbproj", ".sln")	'Will always be already renamed...
+	'Take the version off. This is what we'll search the solution for...
+	ProjectFileName = Mid(renamedProjectFile, 1, Len(renamedProjectFile) - Len(" " & LCase(Version) & Suffix)) & Suffix	
+	
+	'Before going any further, determine if we have anything to change...
+	CommandLine = "FINDINFILES " & Chr(34) & ProjectFileName & Chr(34) & " " & Chr(34) & VSSProject & "/" & Solution & Chr(34) & " -I-" 
 	If ExecuteSSwithoutOutput(CommandLine) = 0 Then Exit Sub
 	
 	workingFolder = Replace(Replace(VSSProject, "$/", "V:\"), "/", "\")
@@ -254,7 +344,7 @@ Private Sub UpdateSolution(Project, Version)
 	'Change the default project to our project (making command-line shorter, and required for CHECKOUT/IN operations)...
 	SetCurrentProject Project
 	'LogMessage("         CurrentDirectory: " & WshShell.CurrentDirectory)
-	CommandLine = "CHECKOUT " & Chr(34) & Solution & Chr(34) 
+	CommandLine = "CHECKOUT " & Chr(34) & Solution & Chr(34) & " -I-"
 	LogMessage("         SS " & CommandLine)
 	LogMessage("         " & ExecuteSS(CommandLine))
 
@@ -264,7 +354,7 @@ Private Sub UpdateSolution(Project, Version)
 	Set targetFile = objFSO.OpenTextFile(workFile, ForWriting, True)
 	Do While Not sourceFile.AtEndOfStream
 		strLine = sourceFile.ReadLine
-		If InStr(strLine, VBProject) > 0 Then strLine = Replace(strLine, VBProject, renamedVBProject)
+		If InStr(strLine, ProjectFileName) > 0 Then strLine = Replace(strLine, ProjectFileName, renamedProjectFile)
 		targetFile.WriteLine(strLine)
 	Loop
 	sourceFile.Close
@@ -275,70 +365,178 @@ Private Sub UpdateSolution(Project, Version)
 	Set sourceFile = Nothing
 	objFSO.MoveFile workFile, Solution
 
-	CommandLine = "CHECKIN " & Chr(34) & Solution & Chr(34) & " -C""VSSRename automated version update."""
+	CommandLine = "CHECKIN " & Chr(34) & Solution & Chr(34) & " -I- -C""VSSRename automated version update."""
+	LogMessage("         SS " & CommandLine)
+	LogMessage("         " & ExecuteSS(CommandLine))
+End Sub
+Private Sub UpdateInstallShield(Project, Version, PriorVersion)
+	Dim CommandLine, Product, VSSProject, ProjectFileName, workingFolder, workFile, sourceFile, targetFile, strLine, Suffix
+	Dim searchSccPath, SccPath, searchString
+
+	'Project:											'$/FiRRe Version 4.6/InstallShield/FiRRe.ism
+	'Version:											'v4.6
+	Product = GetProduct(Project)						'FiRRe
+	VSSProject = GetVSSProject(Project)					'$/FiRRe Version 4.6/InstallShield
+	ProjectFileName = GetProjectFileName(Project)		'FiRRe.ism
+	Suffix = GetSuffix(Project)							'.ism
+
+	If Not AlreadyRenamed(Project, Version, Suffix) Then ProjectFileName = Mid(ProjectFileName, 1, Len(ProjectFileName) - Len(Suffix)) & " " & LCase(Version) & Suffix	'FiRRe v4.6.ism
+
+	'What are we looking for...?
+	searchSccPath = "$/" & Product & "/InstallShield"	'<row><td>SccPath</td><td>"$/FiRRe/InstallShield", ESZAAAAA</td></row>
+	SccPath = RootProject & "/InstallShield"
+
+	'Before going any further, determine if we have anything to change...
+	CommandLine = "FINDINFILES " & Chr(34) & searchSccPath & Chr(34) & " " & Chr(34) & VSSProject & "/" & ProjectFileName & Chr(34) & " -I-"
+	If ExecuteSSwithoutOutput(CommandLine) = 0 Then
+		CommandLine = "FINDINFILES " & Chr(34) & "\" & PriorVersion & "<" & Chr(34) & " " & Chr(34) & VSSProject & "/" & ProjectFileName & Chr(34) & " -I-"
+		If ExecuteSSwithoutOutput(CommandLine) = 0 Then
+			CommandLine = "FINDINFILES " & Chr(34) & "\SunGard\" & Product & "<" & Chr(34) & " " & Chr(34) & VSSProject & "/" & ProjectFileName & Chr(34) & " -I-"
+			If ExecuteSSwithoutOutput(CommandLine) = 0 Then
+				CommandLine = "FINDINFILES " & Chr(34) & "\Projects\" & Product & "<" & Chr(34) & " " & Chr(34) & VSSProject & "/" & ProjectFileName & Chr(34) & " -I-"
+				If ExecuteSSwithoutOutput(CommandLine) = 0 Then Exit Sub
+			End If
+		End If
+	End If
+	
+	workingFolder = Replace(Replace(VSSProject, "$/", "V:\"), "/", "\")
+	If Not objFSO.FolderExists(workingFolder) Then
+		LogMessage("         Error: Working Folder [assumed] """ & workingFolder & """ does not exist! Get latest version of project and run this utility again.")
+		Exit Sub
+	End If
+	WshShell.CurrentDirectory = workingFolder
+	'Change the default project to our project (making command-line shorter, and required for CHECKOUT/IN operations)...
+	SetCurrentProject Project
+	'LogMessage("         CurrentDirectory: " & WshShell.CurrentDirectory)
+	CommandLine = "CHECKOUT " & Chr(34) & ProjectFileName & Chr(34) & " -I-"
+	LogMessage("         SS " & CommandLine)
+	LogMessage("         " & ExecuteSS(CommandLine))
+
+	LogMessage("         Updating " & ProjectFileName & "...")
+	Set sourceFile = objFSO.OpenTextFile(ProjectFileName, ForReading, False)
+	workFile = WshShell.ExpandEnvironmentStrings("%TEMP%") & "\VSSRename.work"
+	Set targetFile = objFSO.OpenTextFile(workFile, ForWriting, True)
+	
+	Dim TableName, PropertyName
+	TableName = vbNullString
+	
+	Do While Not sourceFile.AtEndOfStream
+		strLine = sourceFile.ReadLine
+		If Left(Trim(strLine), Len("<table name=""")) = "<table name=""" Then TableName = Mid(Trim(strLine), Len("<table name=""")+1, Len(Trim(strLine))-Len("<table name=""")-2)
+		If Trim(strLine) = "</table>" Then TableName = vbNullString
+
+		'Note: We're not dealing with the Directory or related data in the Component table as these should be updated by 
+		'      InstallShield itself the first time the project is built after being renamed...
+		
+		If TableName = "InstallShield" Then
+			'<row><td>SccPath</td><td>"$/FiRRe/InstallShield", ESZAAAAA</td></row>
+			If InStr(strLine, "SccPath") > 0 Then strLine = Replace(strLine, searchSccPath, SccPath)
+		End If
+		If TableName = "ISPathVariable" Then
+			searchString = "SunGard Shared\" & PriorVersion & "<"						'<row><td>ComponentSource</td><td><AppServerFolder>\Common\SunGard Shared\v4.3</td><td/><td>2</td></row>
+			If Left(Trim(strLine), Len("<row><td>ComponentSource")) = "<row><td>ComponentSource" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "SunGard Shared\" & Version & "<")
+			searchString = "\SunGard\" & Product & "<"									'<row><td>AppServerFolder</td><td>\\WSRV08\SunGard\FiRRe</td><td/><td>2</td></row>
+			If Left(Trim(strLine), Len("<row><td>AppServerFolder")) = "<row><td>AppServerFolder" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "\SunGard\" & Product & " " & Version & "<")
+			searchString = "<AppServerFolder>\program files\SunGard\" & Product & "<"	'<row><td>FiRReExePath</td><td><AppServerFolder>\program files\SunGard\FiRRe</td><td/><td>2</td></row>
+			If Left(Trim(strLine), Len("<row><td>" & Product & "ExePath")) = "<row><td>" & Product & "ExePath" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "<AppServerFolder>\program files\SunGard\" & Product & " " & Version & "<")
+			searchString = "\Projects\" & Product & "<"									'<row><td>FiRReProject</td><td>\\WSRV08\Projects\FiRRe</td><td/><td>2</td></row>
+			If Left(Trim(strLine), Len("<row><td>" & Product & "Project")) = "<row><td>" & Product & "Project" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "\Projects\" & Product & " Version " & mid(Version, 2) & "<")
+		End If
+		If TableName = "ISRelease" Then
+			searchString = ">" & PriorVersion & "<"										'<row><td>v4.3</td><td>BNY</td><td>C:\InstallShield\FiRRe</td><td>FiRRe</td><td>1</td><td>1033</td><td>2</td><td>2</td><td>Intel</td><td/><td>1033</td><td>3</td><td>0</td><td>0</td><td>0</td><td/><td>0</td><td/><td>\\WSRV08\InstallShield\FiRRe\BNYMv4365</td><td/><td>http://</td><td/><td/><td/><td/><td>73741</td><td/><td/><td/><td/></row>
+			If Left(Trim(strLine), Len("<row><td>" & PriorVersion)) = "<row><td>" & PriorVersion And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, ">" & Version & "<")
+		End If
+		If TableName = "ISReleaseExtended" Then
+			searchString = ">" & PriorVersion & "<"										'<row><td>v4.3</td><td>BNY</td><td>0</td><td>http://</td><td>0</td><td>install</td><td>install</td><td>[WindowsFolder]Downloaded Installations</td><td>1</td><td>http://www.installengine.com/Msiengine20</td><td>http://www.installengine.com/Msiengine20</td><td>1</td><td>http://www.installengine.com/cert05/isengine</td><td/><td/><td/><td/><td>1</td><td>http://www.installengine.com/cert05/dotnetfx</td><td>1</td><td>1033</td><td/><td/><td/><td/><td>24</td><td>3</td><td>20</td><td/><td/></row>
+			If Left(Trim(strLine), Len("<row><td>" & PriorVersion)) = "<row><td>" & PriorVersion And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, ">" & Version & "<")
+		End If
+		If TableName = "Property" Then
+			'<row><td>ProductName</td><td>FiRRe Version 4.3.65</td><td/></row>
+			If Left(Trim(strLine), Len("<row><td>ProductName</td>")) = "<row><td>ProductName</td>" Then strLine = "<row><td>ProductName</td><td>" & Product & " Version " & mid(Version, 2) & ".0</td><td/></row>"
+			'<row><td>ProductVersion</td><td>4.3.65</td><td/></row>
+			If Left(Trim(strLine), Len("<row><td>ProductVersion</td>")) = "<row><td>ProductVersion</td>" Then strLine = "<row><td>ProductVersion</td><td>" & mid(Version, 2) & ".0</td><td/></row>"
+		End If
+		If TableName = "ISString" Then
+			searchString = "|" & Product & " " & PriorVersion & "<"						'<row><td>S_FiRRe_ShortLongName</td><td>1033</td><td>FIRREV~1.3|FiRRe v4.3</td><td>0</td><td/><td>-1801705073</td></row>
+			If Left(Trim(strLine), Len("<row><td>S_" & Product & "_ShortLongName")) = "<row><td>S_" & Product & "_ShortLongName" And InStr(strLine, searchString) > 0 Then strLine = Replace(strLine, searchString, "|" & Product & " " & Version & "<")
+		End If
+		targetFile.WriteLine(strLine)
+	Loop
+	sourceFile.Close
+	targetFile.Close
+
+	Set sourceFile = objFSO.GetFile(ProjectFileName)
+	sourceFile.Delete
+	Set sourceFile = Nothing
+	objFSO.MoveFile workFile, ProjectFileName
+
+	CommandLine = "CHECKIN " & Chr(34) & ProjectFileName & Chr(34) & " -I- -C""VSSRename automated version update."""
 	LogMessage("         SS " & CommandLine)
 	LogMessage("         " & ExecuteSS(CommandLine))
 End Sub
 Private Function AlreadyRenamed(Project, Version, Suffix)
-	Dim VBProject
-	VBProject = GetVBProject(Project)
 	AlreadyRenamed = False
-	'First check to see if this project has already been renamed (and skip if so)...
 	If Right(LCase(Mid(Project, 1, Len(Project) - Len(Suffix))), Len(Version)) = LCase(Version) Then AlreadyRenamed = True
 End Function
 Private Sub DoRename(Project, Version, Suffix)
-	Dim VBProject, renamedVBProject, sOutput
+	Dim FileName, renamedProjectFile, sOutput
 
 	If AlreadyRenamed(Project, Version, Suffix) Then Exit Sub
 
 	'Change the default project to our project (making command-line shorter, and required for CHECKOUT/IN operations)...
 	SetCurrentProject Project
-	VBProject = GetVBProject(Project)
-	renamedVBProject = Mid(VBProject, 1, Len(VBProject) - Len(Suffix)) & " " & LCase(Version) & Suffix
+	FileName = GetProjectFileName(Project)
+	renamedProjectFile = Mid(FileName, 1, Len(FileName) - Len(Suffix)) & " " & LCase(Version) & Suffix
 	
 	'\\WSRV08\VSS\win32\SS RENAME "FiRRe.vbp" "FiRRe v4.6.vbp"
-	CommandLine = "RENAME " & Chr(34) & VBProject & Chr(34) & " " & Chr(34) & renamedVBProject & Chr(34)
-	LogMessage("         SS " & CommandLine & " -S")	'-S)mart mode - renaming the local copy after renaming the VSS master copy.
+	CommandLine = "RENAME " & Chr(34) & FileName & Chr(34) & " " & Chr(34) & renamedProjectFile & Chr(34) & " -I- -S"	'-S)mart mode - renaming the local copy after renaming the VSS master copy.
+	LogMessage("         SS " & CommandLine)
 	'LogMessage("         " & ExecuteSS(CommandLine))
 	sOutput = ExecuteSS(CommandLine)
 	if Trim(sOutput) <> vbNullString Then LogMessage("         " & sOutput)
 	sOutput = vbNullString
 End Sub
-Private Sub RenameProject(Project, Version)
-	Dim CommandLine, VBProject, Suffix
+Private Sub RenameProject(Project, Version, PriorVersion)
+	Dim CommandLine, Suffix
 	
 	LogMessage("      " & Mid(Project, Len(RootProject)+2))
-
-	VBProject = GetVBProject(Project)
 	Suffix = GetSuffix(Project)
-
-	DoRename Project, Version, Suffix
-	
 	Select Case Suffix
 		Case ".vbp"
+			'Rename the VB6 project through SourceSafe...
+			DoRename Project, Version, Suffix
 		Case ".vbproj"
+			'Rename the VB.NET project through SourceSafe...
+			DoRename Project, Version, Suffix
 			'We must also rename the associated .NET supporting project files...
 			DoRename Replace(Project, ".vbproj", ".sln"), Version, ".sln"						'Solution file
 			DoRename Replace(Project, ".vbproj", ".vssscc"), Version, ".vssscc"					'Visual Studio Source Control Project Metadata File
 			DoRename Replace(Project, ".vbproj", ".vbproj.vspscc"), Version, ".vbproj.vspscc"	'Visual Studio Source Control Solution Metadata File
+			'Next, we must update path references in the .vbproj file to reflect the new version
+			'	Note: This is rather hard-coded for the FiRRe/Components relationship)...
+			UpdateProject Project, Version
 			'Lastly, we must CheckOut the solution and update any .vbproj references within to the newly renamed incarnation of the project...
 			UpdateSolution Project, Version
+		Case ".ism"
+			'Rename the InstallShield project through SourceSafe...
+			DoRename Project, Version, Suffix
+			UpdateInstallShield Project, Version, PriorVersion
 	End Select
 End Sub
 Private Sub DisplayHelp
     LogMessage("Usage:")
-    LogMessage("VSSRename.vbs <Database>,<RootProject> [,<UserName>, <Password>]")
+    LogMessage("VSSRename.vbs <Database>,<RootProject>,<PriorVersion>[,<UserName>, <Password>]")
     LogMessage("  Database      SourceSafe Database Name (i.e. ""WSRV08 SourceSafe Database"")")
     LogMessage("  RootProject   SourceSafe project to process [recursively] (i.e. ""$/FiRRe Version 4.6"")")
+    LogMessage("  PriorVersion  Prior version number in the form <MajorVersion>.<MinorVersion> (i.e. ""4.5"")")
     LogMessage("  User          SourceSafe User Name (optional)")
     LogMessage("  Password      SourceSafe Password (optional)")
 End Sub
 
 LogMessage("[VSSRename.vbs" & vbTab & Now() & "]")
-LogMessage("   Current Directory: " & WshShell.CurrentDirectory)
 Select Case WScript.Arguments.Count
-	Case 2
-	Case 4
+	Case 3
+	Case 5
 	Case Else
 		DisplayHelp()
 		WScript.Quit
@@ -349,16 +547,19 @@ If InStr(RootProject, " Version ") = 0 Then
 	WScript.Quit
 End If
 Version = "v" & Mid(RootProject, InStr(RootProject, " Version ") + Len(" Version "))
-If WScript.Arguments.Count = 2 Then
+PriorVersion = "v" & WScript.Arguments(2)
+If WScript.Arguments.Count = 3 Then
 	OpenSourceSafe WScript.Arguments(0), "", ""
 Else
 	OpenSourceSafe WScript.Arguments(0), WScript.Arguments(2), WScript.Arguments(3)
 End If
+LogMessage("   Current Directory: " & WshShell.CurrentDirectory)
 startFolder = WshShell.CurrentDirectory
 
 LogMessage("   Scanning " & DatabaseName & "...")
 GetProjectFiles(RootProject & "/*.vbp")
 GetProjectFiles(RootProject & "/*.vbproj")
+GetProjectFiles(RootProject & "/*.ism")
 'GetProjectFiles(RootProject & "/*.vbproj v4.2.vspscc")
 LogMessage("")
 LogMessage("   Renaming Projects...")
@@ -366,11 +567,9 @@ If Not IsNull(ProjectList) Then
 	For i = 1 To UBound(ProjectList)
 		'LogMessage("ProjectList(" & i & "): " & ProjectList(i))
 		'LogMessage("   Suffix: " & GetSuffix(ProjectList(i)))
-		RenameProject ProjectList(i), Version
+		RenameProject ProjectList(i), Version, PriorVersion
 	Next
 End If
-
-'DoRename DatabaseName, Project, User, Password
 Set objFSO = Nothing
 WshShell.CurrentDirectory = startFolder
 WScript.Quit
