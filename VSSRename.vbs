@@ -7,28 +7,10 @@
 '   Date:       Developer:		Description:
 '   08/13/10    Ken Clark		Created;
 '=================================================================================================================================
+'Notes:
 'Recommended Command-Line:	cscript VSSRename.vbs "WSRV08 VSS Database" "$/FiRRe Version 4.2"
 'Script can be debugged by opening a CMD window and executing the following command (note that the two slashes are not a typo)...
 '	cscript//X VSSRename.vbs
-'=================================================================================================================================
-'Notes:
-'\\WSRV08\VSS\win32\SS DIR "$/Components Version 4.6/*.vbp" -R
-'\\WSRV08\VSS\win32\SS RENAME "$/Components Version 4.6/CRUFLSIA/CRUFLSIA.vbp" "$/Components Version 4.6/CRUFLSIA/CRUFLSIA v4.6.vbp" -S
-'\\WSRV08\VSS\win32\SS RENAME "$/Components Version 4.6/mapirtf/VBSource/vbmaprtf.vbp
-'\\WSRV08\VSS\win32\SS RENAME "$/Components Version 4.6/SIASADO/SIASADO.vbp
-'\\WSRV08\VSS\win32\SS RENAME "$/Components Version 4.6/SIASCL/SIASCL.vbp
-'\\WSRV08\VSS\win32\SS RENAME "$/Components Version 4.6/SIASCurrency/SIASCurrency.vbp
-'\\WSRV08\VSS\win32\SS RENAME "$/Components Version 4.6/SIASDB/SIASDB.vbp
-'\\WSRV08\VSS\win32\SS RENAME "$/Components Version 4.6/SIASEMail/SIASEmail.vbp
-'\\WSRV08\VSS\win32\SS RENAME "$/Components Version 4.6/SIASRegisterDLLs/SIASRegisterDLLs.vbp
-'\\WSRV08\VSS\win32\SS RENAME "$/Components Version 4.6/SIASRPC/SIASRPC.vbp
-'\\WSRV08\VSS\win32\SS RENAME "$/Components Version 4.6/SIASRPC/SIASBPE00000/SIASBPE00000.vbp
-'\\WSRV08\VSS\win32\SS RENAME "$/Components Version 4.6/SIASRPC/SIASBPE00001/SIASBPE00001.vbp
-'\\WSRV08\VSS\win32\SS RENAME "$/Components Version 4.6/SIASRPC/SIASBPE21130/SIASBPE21130.vbp
-'\\WSRV08\VSS\win32\SS RENAME "$/Components Version 4.6/SIASRPC/SIASBPE21140/SIASBPE21140.vbp
-'\\WSRV08\VSS\win32\SS RENAME "$/Components Version 4.6/SIASRPC/SIASBPE21150/SIASBPE21150.vbp
-'\\WSRV08\VSS\win32\SS RENAME "$/Components Version 4.6/SIASRPC.NET/SIASRPCDemo/SIASRPCDemo.vbp
-'\\WSRV08\VSS\win32\SS RENAME "$/Components Version 4.6/SIASUTL/SIASUTL.vbp
 '=================================================================================================================================
 Const HKEY_CURRENT_USER = &H80000001
 Const HKEY_LOCAL_MACHINE = &H80000002
@@ -39,7 +21,7 @@ Const ForAppending = 8
 Const UnicodeFormat = -1
 Const MB = 1048576
 Dim ProjectList(), iProject, startFolder
-Dim WshShell, objFSO, SS, DatabaseName, UserName, UserPassword, RootProject, Version
+Dim WshShell, objFSO, SS, DatabaseName, UserName, UserPassword, RootProject, Version, CurrentVSSProject
 Set WshShell = CreateObject("WScript.Shell")
 Set objFSO = CreateObject("Scripting.FileSystemObject")
 ReDim ProjectList(0)
@@ -110,29 +92,20 @@ Private Function GetEnvironmentVariable(VariableName)
 	    Exit Function
 	Next
 End Function
-Private Sub CleanUp(FileName)
-    Const DeleteReadOnly = TRUE
-	Const wbemFlagReturnImmediately = &h10
-	Const wbemFlagForwardOnly = &h20
-
-    strComputer = "."
-    Set objWMIService = GetObject("winmgmts:{impersonationLevel=impersonate}\\" & strComputer & "\root\cimv2")
-    Set objSSA = objFSO.GetFile(FileName)
-    BaseName = objSSA.ParentFolder & "\" & objFSO.GetBaseName(objSSA) & "."
-    BackupName = Mid(BaseName, 1, Len(BaseName) - Len("yyyyMMdd-HHmmss."))
-    SQLSource = "Select * from CIM_DataFile where Path='\\" & Replace(Mid(objSSA.ParentFolder, 4), "\", "\\") & "\\'"	' And CreationDate < '" & objSSA.CreationDate & "'""
-    Set colFiles = objWMIService.ExecQuery(SQLSource, "WQL", wbemFlagReturnImmediately + wbemFlagForwardOnly)
-    For Each objFile in colFiles
-		If Left(objFile.Name, Len(BackupName)) = LCase(BackupName) And Left(objFile.Name, Len(BaseName)) <> LCase(BaseName) Then 
-			'Wscript.Echo objFile.Name
-			objFSO.DeleteFile(objFile.Name), DeleteReadOnly
-		End If
-    Next    
-End Sub
-Private Function Execute(Command)
-	Dim oExec, oStdOut, sOutput
+Private Function ExecuteSSwithoutOutput(Command)
+	Dim oExec
     'LogMessage("Executing: " & Command)
-	Set oExec = WshShell.Exec(Command)
+	Set oExec = WshShell.Exec(SS & Command)
+    Do
+		WScript.Sleep 10
+	Loop Until oExec.Status <> 0
+	ExecuteSSwithoutOutput = oExec.ExitCode
+	Set oExec = Nothing
+End Function
+Private Function ExecuteSS(Command)
+	Dim oExec, oStdOut, sOutput
+    'LogMessage("Executing: " & SS & Command)
+	Set oExec = WshShell.Exec(SS & Command)
 	Set oStdOut = oExec.StdOut
 	sOutput = ""
     Do
@@ -141,7 +114,7 @@ Private Function Execute(Command)
 			sOutput = sOutput & oStdOut.ReadAll
 		loop 
 	Loop Until oExec.Status <> 0 and oStdOut.AtEndOfStream
-	Execute = sOutput
+	ExecuteSS = sOutput
 	sOutput = ""
 	Set oStdOut = Nothing
 	Set oExec = Nothing
@@ -179,8 +152,8 @@ Private Sub GetProjectFiles(searchString)
 	Dim workFile
 	workFile = WshShell.ExpandEnvironmentStrings("%TEMP%") & "\VSSRename.work"
 	Set objFile = objFSO.OpenTextFile(workFile, ForWriting, True)
-    CommandLine = SS & " DIR " & Chr(34) & searchString & Chr(34) & " -R"
-	objFile.WriteLine(Execute(CommandLine))
+    CommandLine = "DIR " & Chr(34) & searchString & Chr(34) & " -R"
+	objFile.WriteLine(ExecuteSS(CommandLine))
 	objFile.Close
 	
 	Dim vssProject, strLine
@@ -230,18 +203,52 @@ Private Function GetVBProject(Project)
 		GetVBProject = vbNullString
 	End If
 End Function
-Private Sub UpdateSolution(VSSProject, Solution, VBProject, renamedVBProject)
-	Dim workingFolder, workFile, sourceFile, targetFile, strLine
-	workingFolder = Replace(VSSProject, "$/", "V:")
+Private Function GetVSSProject(Project)
+	Dim VBProject, VSSProject
+	VBProject = GetVBProject(Project)
+	VSSProject = Mid(Project, 1, Len(Project) - Len(VBProject) - 1)
+	GetVSSProject = VSSProject
+End Function
+Private Sub SetCurrentProject(Project)
+	Dim CommandLine, VSSProject
+	VSSProject = GetVSSProject(Project)
+	If VSSProject = CurrentVSSProject Then Exit Sub
+	
+	CommandLine = "CP " & Chr(34) & VSSProject & Chr(34)	'\\WSRV08\VSS\win32\SS CP "$/FiRRe Version 4.6"
+	LogMessage("         SS " & CommandLine)
+	LogMessage("         " & ExecuteSS(CommandLine))
+End Sub
+Private Sub UpdateSolution(Project, Version)
+	Dim CommandLine, VSSProject, VBProject, workingFolder, workFile, sourceFile, targetFile, strLine, renamedVBProject, Solution, Suffix
+	
+	VSSProject = GetVSSProject(Project)					'$/FiRRe Version 4.6/FiRRe.vbproj
+	VBProject = GetVBProject(Project)
+	Suffix = GetSuffix(Project)
+	If AlreadyRenamed(Project, Version, Suffix) Then	'$/FiRRe Version 4.6/FiRRe v4.6.vbproj
+		renamedVBProject = VBProject
+	Else												'$/FiRRe Version 4.6/FiRRe.vbproj
+		renamedVBProject = Mid(VBProject, 1, Len(VBProject) - Len(Suffix)) & " " & LCase(Version) & Suffix
+	End If
+	Solution = Replace(renamedVBProject, ".vbproj", ".sln")	'Will always be already renamed...
+	'Take the version off. This is what we'll search the solution for...
+	VBProject = Mid(renamedVBProject, 1, Len(renamedVBProject) - Len(" " & LCase(Version) & Suffix)) & Suffix	
+	
+	'Before going any further, determine if we have anything to change...
+	CommandLine = "FINDINFILES " & Chr(34) & VBProject & Chr(34) & " " & Chr(34) & VSSProject & "/" & Solution & Chr(34) 
+	If ExecuteSSwithoutOutput(CommandLine) = 0 Then Exit Sub
+	
+	workingFolder = Replace(Replace(VSSProject, "$/", "V:\"), "/", "\")
 	If Not objFSO.FolderExists(workingFolder) Then
 		LogMessage("         Error: Working Folder [assumed] """ & workingFolder & """ does not exist!")
 		Exit Sub
 	End If
 	WshShell.CurrentDirectory = workingFolder
+	'Change the default project to our project (making command-line shorter, and required for CHECKOUT/IN operations)...
+	SetCurrentProject Project
 	'LogMessage("         CurrentDirectory: " & WshShell.CurrentDirectory)
 	CommandLine = "CHECKOUT " & Chr(34) & Solution & Chr(34) 
 	LogMessage("         SS " & CommandLine)
-	LogMessage("         " & Execute(SS & CommandLine))
+	LogMessage("         " & ExecuteSS(CommandLine))
 
 	LogMessage("         Updating " & Solution & "...")
 	Set sourceFile = objFSO.OpenTextFile(Solution, ForReading, False)
@@ -262,72 +269,61 @@ Private Sub UpdateSolution(VSSProject, Solution, VBProject, renamedVBProject)
 
 	CommandLine = "CHECKIN " & Chr(34) & Solution & Chr(34) & " -C""VSSRename automated version update."""
 	LogMessage("         SS " & CommandLine)
-	LogMessage("         " & Execute(SS & CommandLine))
+	LogMessage("         " & ExecuteSS(CommandLine))
 End Sub
-Private Function AlreadyRenamed(Project, Version)
-	Dim VBProject, Suffix
+Private Function AlreadyRenamed(Project, Version, Suffix)
+	Dim VBProject
 	VBProject = GetVBProject(Project)
-	Suffix = GetSuffix(Project)
 	AlreadyRenamed = False
 	'First check to see if this project has already been renamed (and skip if so)...
 	If Right(LCase(Mid(Project, 1, Len(Project) - Len(Suffix))), Len(Version)) = LCase(Version) Then AlreadyRenamed = True
 End Function
-Private Sub DoRename(Project, Version)
-	Dim VBProject, Suffix, renamedVBProject
+Private Sub DoRename(Project, Version, Suffix)
+	Dim VBProject, renamedVBProject
 
-	If AlreadyRenamed(Project, Version) Then Exit Sub
+	If AlreadyRenamed(Project, Version, Suffix) Then Exit Sub
 
+	'Change the default project to our project (making command-line shorter, and required for CHECKOUT/IN operations)...
+	SetCurrentProject Project
 	VBProject = GetVBProject(Project)
-	Suffix = GetSuffix(Project)
 	renamedVBProject = Mid(VBProject, 1, Len(VBProject) - Len(Suffix)) & " " & LCase(Version) & Suffix
 	
 	'\\WSRV08\VSS\win32\SS RENAME "FiRRe.vbp" "FiRRe v4.6.vbp"
 	CommandLine = "RENAME " & Chr(34) & VBProject & Chr(34) & " " & Chr(34) & renamedVBProject & Chr(34)
 	LogMessage("         SS " & CommandLine & " -S")	'-S)mart mode - renaming the local copy after renaming the VSS master copy.
-	LogMessage("         " & Execute(SS & CommandLine))
+	LogMessage("         " & ExecuteSS(CommandLine))
 End Sub
 Private Sub RenameProject(Project, Version)
-	Dim CommandLine, VSSProject, VBProject, Suffix, renamedVBProject
+	Dim CommandLine, VBProject, Suffix
 	
 	LogMessage("      " & Mid(Project, Len(RootProject)+2))
 
-	If AlreadyRenamed(Project, Version) Then Exit Sub
-	
-	'Change the default project to our project (making command-line shorter, and required for CHECKOUT/IN operations)...
 	VBProject = GetVBProject(Project)
-	VSSProject = Mid(Project, 1, Len(Project) - Len(VBProject) - 1)
 	Suffix = GetSuffix(Project)
-	renamedVBProject = Mid(VBProject, 1, Len(VBProject) - Len(Suffix)) & " " & LCase(Version) & Suffix
-	CommandLine = "CP " & Chr(34) & VSSProject & Chr(34)	'\\WSRV08\VSS\win32\SS CP "$/FiRRe Version 4.6"
-	LogMessage("         SS " & CommandLine)
-	LogMessage("         " & Execute(SS & CommandLine))
 
-	DoRename Project, Version
+	DoRename Project, Version, Suffix
 	
 	Select Case Suffix
 		Case ".vbp"
 		Case ".vbproj"
 			'We must also rename the associated .NET supporting project files...
-			DoRename Replace(Project, ".vbproj", ".sln"), Version			'Solution file
-			DoRename Replace(Project, ".vbproj", ".vssscc"), Version		'Visual Studio Source Control Project Metadata File
-			DoRename Replace(Project, ".vbproj", ".vbproj.vspscc"), Version	'Visual Studio Source Control Solution Metadata File
-			
+			DoRename Replace(Project, ".vbproj", ".sln"), Version, ".sln"						'Solution file
+			DoRename Replace(Project, ".vbproj", ".vssscc"), Version, ".vssscc"					'Visual Studio Source Control Project Metadata File
+			DoRename Replace(Project, ".vbproj", ".vbproj.vspscc"), Version, ".vbproj.vspscc"	'Visual Studio Source Control Solution Metadata File
 			'Lastly, we must CheckOut the solution and update any .vbproj references within to the newly renamed incarnation of the project...
-			Dim Solution
-			Solution = Replace(renamedVBProject, ".vbproj", ".sln")
-			UpdateSolution VSSProject, Solution, VBProject, renamedVBProject
+			UpdateSolution Project, Version
 	End Select
 End Sub
 Private Sub DisplayHelp
-    LogMessage "Usage:"
-    LogMessage "VSSRename.vbs <Database>,<RootProject> [,<UserName>, <Password>]"
-    LogMessage "  Database      SourceSafe Database Name (i.e. ""WSRV08 SourceSafe Database"")"
-    LogMessage "  RootProject   SourceSafe project to process [recursively] (i.e. ""$/FiRRe Version 4.6"")"
-    LogMessage "  User          SourceSafe User Name (optional)"
-    LogMessage "  Password      SourceSafe Password (optional)"
+    LogMessage("Usage:")
+    LogMessage("VSSRename.vbs <Database>,<RootProject> [,<UserName>, <Password>]")
+    LogMessage("  Database      SourceSafe Database Name (i.e. ""WSRV08 SourceSafe Database"")")
+    LogMessage("  RootProject   SourceSafe project to process [recursively] (i.e. ""$/FiRRe Version 4.6"")")
+    LogMessage("  User          SourceSafe User Name (optional)")
+    LogMessage("  Password      SourceSafe Password (optional)")
 End Sub
 
-LogMessage "[VSSRename.vbs" & vbTab & Now() & "]"
+LogMessage("[VSSRename.vbs" & vbTab & Now() & "]")
 LogMessage("   Current Directory: " & WshShell.CurrentDirectory)
 Select Case WScript.Arguments.Count
 	Case 2
@@ -350,7 +346,7 @@ End If
 startFolder = WshShell.CurrentDirectory
 
 LogMessage("   Scanning " & DatabaseName & "...")
-GetProjectFiles(RootProject & "/*.vbp")
+'GetProjectFiles(RootProject & "/*.vbp")
 GetProjectFiles(RootProject & "/*.vbproj")
 LogMessage("")
 LogMessage("   Renaming Projects...")
