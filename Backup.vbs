@@ -58,16 +58,16 @@ Public Function FormatTimeStamp(TimeStamp)
     iSecond = Second(TimeStamp)
     
     FormatTimeStamp = iYear
-    if iMonth < 9 then FormatTimeStamp = FormatTimeStamp & "0"
+    if iMonth < 10 then FormatTimeStamp = FormatTimeStamp & "0"
     FormatTimeStamp = FormatTimeStamp & iMonth
-    if iDay < 9 then FormatTimeStamp = FormatTimeStamp & "0"
+    if iDay < 10 then FormatTimeStamp = FormatTimeStamp & "0"
     FormatTimeStamp = FormatTimeStamp & iDay
     FormatTimeStamp = FormatTimeStamp & "-"
-    if iHour < 9 then FormatTimeStamp = FormatTimeStamp & "0"
+    if iHour < 10 then FormatTimeStamp = FormatTimeStamp & "0"
     FormatTimeStamp = FormatTimeStamp & iHour
-    if iMinute < 9 then FormatTimeStamp = FormatTimeStamp & "0"
+    if iMinute < 10 then FormatTimeStamp = FormatTimeStamp & "0"
     FormatTimeStamp = FormatTimeStamp & iMinute
-    if iSecond < 9 then FormatTimeStamp = FormatTimeStamp & "0"
+    if iSecond < 10 then FormatTimeStamp = FormatTimeStamp & "0"
     FormatTimeStamp = FormatTimeStamp & iSecond
 End Function
 Public Function GetEnvironmentVariable(VariableName)
@@ -128,7 +128,7 @@ Public Sub CleanUp(FileName)
     Set objBKF = objFSO.GetFile(FileName)
     BaseName = objBKF.ParentFolder & "\" & objFSO.GetBaseName(objBKF) & "."
     BackupName = Mid(BaseName, 1, Len(BaseName) - Len("yyyyMMdd-HHmmss."))
-    SQLSource = "Select * from CIM_DataFile where Path='\\" & Replace(Mid(objBKF.ParentFolder, 4), "\", "\\") & "\\'"
+    SQLSource = "Select * from CIM_DataFile where Path='\\" & Replace(Mid(objBKF.ParentFolder, 4), "\", "\\") & "\\'")
     Set colFiles = objWMIService.ExecQuery(SQLSource, "WQL", wbemFlagReturnImmediately + wbemFlagForwardOnly)
     For Each objFile in colFiles
 		If Left(objFile.Name, Len(BackupName)) = LCase(BackupName) And Left(objFile.Name, Len(BaseName)) <> LCase(BaseName) Then 
@@ -210,4 +210,3 @@ End Select
 
 'Remote Machine...
 ''DoBackup "\\EUKB6\My Documents",                            BackupFolder & "\EUKB6 My Documents.bkf",                   "EUKB6 My Documents",                   "Full NT Backup of EUKB6 My Documents"                         ' minutes
-Exit
