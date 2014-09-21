@@ -1,19 +1,23 @@
+'Test.vbs
+'=================================================================================================================================
 Private Sub LogMessage(Message)
 	Const ForAppending = 8
 	Const UnicodeFormat = -1
 	Const MB = 1048576
-	Dim objStdOut, objFSO, objFile, LogFile
+	Dim objStdOut, objFSO, objFile, LogFile, BaseName
     Set objStdOut = WScript.StdOut
 	If Not IsNull(objStdOut) Then objStdOut.WriteLine Message
 	
-	LogFile = BackupFolder & "\Backup.log"
+	If TestMode Then BaseName = "Test" Else BaseName = "Backup"
+	
+	LogFile = BackupFolder & "\" & BaseName & ".log"
     Set objFSO = CreateObject("Scripting.FileSystemObject")
     If objFSO.FileExists(LogFile) Then
 		Set objFile = objFSO.GetFile(LogFile)
 		If objFile.Size > 10*MB Then
             Dim dtModified, NewFileName
             dtModified = objFile.DateLastModified
-            NewFileName = BackupFolder & "\Backup." & FormatTimeStamp(dtModified) & ".log"
+            NewFileName = BackupFolder & "\" & BaseName & "." & FormatTimeStamp(dtModified) & ".log"
             objFSO.MoveFile LogFile, NewFileName
 
             'If we successfully renamed our existing file, now police any older files that need to be deleted...
@@ -26,7 +30,7 @@ Private Sub LogMessage(Message)
         Set objFile = Nothing
     End If
     
-	Set objFile = objFSO.OpenTextFile(BackupFolder & "\Backup.log", ForAppending, True)
+	Set objFile = objFSO.OpenTextFile(BackupFolder & "\" & BaseName & ".log", ForAppending, True)
 	objFile.WriteLine(Message)
 	objFile.Close
 	
@@ -163,7 +167,7 @@ End Function
 Public Function GetCreationDate(bksPath)
 	Dim strComputer, objWMIService, FSO, objFile
 	Dim ParentFolder, BaseName, Extension
-	Dim colFileList, varDate
+	Dim colFileList, varDate, SQLSource
 	
 	strComputer = "."
 	Set objWMIService = GetObject("winmgmts:\\" & strComputer & "\root\CIMV2")
@@ -183,17 +187,17 @@ Public Function GetCreationDate(bksPath)
 	'Note that we're not currently handling DST...
 	
 	'LogMessage "Attempting to find CreationDate for " & bksPath & "..."
-    Set colFileList = objWMIService.ExecQuery("ASSOCIATORS OF {Win32_Directory.Name='" & ParentFolder & "'} Where ResultClass = CIM_DataFile")
+    'Set colFileList = objWMIService.ExecQuery("ASSOCIATORS OF {Win32_Directory.Name='" & ParentFolder & "'} Where ResultClass = CIM_DataFile")
+	SQLSource = "Select * from CIM_DataFile where Path='\\" & Replace(Mid(ParentFolder, 4), "\", "\\") & "\\' And FileName Like '" & BaseName & ".%' And Extension='" & Extension & "'"
+	Set colFileList = objWMIService.ExecQuery(SQLSource, "WQL", wbemFlagReturnImmediately + wbemFlagForwardOnly)
     For Each objFile In colFileList
-		If UCase(Left(objFile.FileName, Len(BaseName))) = UCase(BaseName) And UCase(objFile.Extension) = UCase(Extension) Then
-			'LogMessage Now() & vbTab & objFile.FileName & "." & objFile.Extension & " (" & TypeName(objFile) & ")"
-            Set varDate = CreateObject("WbemScripting.SWbemDateTime")
-            varDate.Value = objFile.CreationDate
-            'LogMessage Now() & vbTab & varDate.GetVarDate(True) & " (" & objFile.CreationDate & ") - " & objFile.Name
-            GetCreationDate = varDate.GetVarDate(True)
-            Set varDate = Nothing
-            Exit For
-        End If
+		'LogMessage Now() & vbTab & objFile.FileName & "." & objFile.Extension & " (" & TypeName(objFile) & ")"
+        Set varDate = CreateObject("WbemScripting.SWbemDateTime")
+        varDate.Value = objFile.CreationDate
+        'LogMessage Now() & vbTab & varDate.GetVarDate(True) & " (" & objFile.CreationDate & ") - " & objFile.Name
+        GetCreationDate = varDate.GetVarDate(True)
+        Set varDate = Nothing
+        Exit For
     Next
 
 	Set FSO = Nothing
@@ -239,6 +243,17 @@ Private Function CheckDateModified(objFile, excluded, creationDate, FolderCount,
 		Case Else
 	End Select
 
+    Set objFSO = CreateObject("Scripting.FileSystemObject")
+	If objFSO.FolderExists(Path) Then
+		FolderCount = FolderCount + 1
+		CheckDateModified = False 
+		Exit Function	'Do not check directories (make file changes trigger backups)
+	ElseIf TestMode Then
+		Dim objFSOFile
+		Set objFSOFile = objFSO.GetFile(Path)
+		LogMessage Now() & vbTab & vbTab & "Checking " & objFSOFile.Name & "..."
+	End If
+	
 	If Not IsNull(excluded) Then
 		For i = 1 To UBound(excluded)
 			If Right(excluded(i), 1) <> "\" And UCase(Path) = UCase(excluded(i)) Then CheckDateModified = False : Exit Function
@@ -268,25 +283,27 @@ Private Function CheckDateModified(objFile, excluded, creationDate, FolderCount,
 			Case Else
 		End Select
 	Else
-		LogMessage Now() & vbTab & "Found " & Path & " modified (" & LastModified & ") after " & creationDate
+		LogMessage Now() & vbTab & vbTab & "Found " & Path & " modified (" & LastModified & ") after " & creationDate
 	End If
 End Function
 Private Function ScanSubFolders(Folder, excluded, creationDate, FolderCount, FileCount)
 	Dim objWMIService, colFileList, objFile, varDate
 	Dim strComputer
 
+	If TestMode Then LogMessage Now() & vbTab & "Scanning " & Folder & "..."
+	
     ScanSubFolders = False
 	If CheckDateModified(Folder, excluded, creationDate, FolderCount, FileCount) Then ScanSubFolders = True : Exit Function
 	
-	strComputer = "."
-	Set objWMIService = GetObject("winmgmts:\\" & strComputer & "\root\CIMV2")
-    Set colFileList = objWMIService.ExecQuery("ASSOCIATORS OF {Win32_Directory.Name='" & Folder & "'} Where ResultClass = CIM_DataFile")
-    For Each objFile In colFileList
+	'strComputer = "."
+	'Set objWMIService = GetObject("winmgmts:\\" & strComputer & "\root\CIMV2")
+    'Set colFileList = objWMIService.ExecQuery("ASSOCIATORS OF {Win32_Directory.Name='" & Folder & "'} Where ResultClass = CIM_DataFile")
+    For Each objFile In Folder.Files
 		If CheckDateModified(objFile, excluded, creationDate, FolderCount, FileCount) Then ScanSubFolders = True : Exit For
     Next
     If Not ScanSubFolders Then
 		For Each Subfolder in Folder.SubFolders
-		    If ScanSubFolders(Subfolder, excluded, creationDate, FolderCount, FileCount) Then Exit For
+		    If ScanSubFolders(Subfolder, excluded, creationDate, FolderCount, FileCount) Then ScanSubFolders = True : Exit For
 		Next
 	End If
 
@@ -323,17 +340,23 @@ Private Function SomethingToDo(bks, FileName)
 					included(iIncluded) = Trim(strLine)
 				End If		    
 			Loop
-			objFile.Close				
+			objFile.Close
+			If iExcluded = 0 Then ReDim excluded(0)
 
 			For iIncluded = 1 To UBound(included)
 				If UCase(included(iIncluded)) = "SYSTEMSTATE" Then SomethingToDo = True : Exit Function
-				
+				Dim aExcluded
+				If iExcluded > 0 Then
+					aExcluded = excluded
+				Else
+					aExcluded = Null
+				End If
 				If Right(included(iIncluded), 1) = "\" Then
 					'We have a folder reference...
-					SomethingToDo = ScanSubfolders(objFSO.GetFolder(included(iIncluded)), excluded, creationDate, FolderCount, FileCount)
+					SomethingToDo = ScanSubfolders(objFSO.GetFolder(included(iIncluded)), aExcluded, creationDate, FolderCount, FileCount)
 				Else
 					'We have a file reference...
-					SomethingToDo = CheckDateModified(objFSO.GetFile(included(iIncluded)), excluded, creationDate, FolderCount, FileCount)
+					SomethingToDo = CheckDateModified(objFSO.GetFile(included(iIncluded)), aExcluded, creationDate, FolderCount, FileCount)
 				End If
 				'If we found something needing to be backed-up, no point in continuing, simply return...
 				If SomethingToDo Then Exit Function
@@ -361,7 +384,6 @@ Public Sub DoBackup(bks, FileName, JobName, Description, iJob, totalJobs)
 
 	LogMessage Now() & vbTab & "Backing-Up " & bks & "..."
 	If SomethingToDo(bks, FileName) Then
-exit sub
 		dtNow = Now()
 		StartTimeStamp = DateDiff("s", BaseCTime(), dtNow)      
 		If Not objFSO.FileExists(FileName) Then
@@ -373,6 +395,7 @@ exit sub
 		
 		CommandLine = "NTBACKUP backup """ & bks & """ /v:yes /r:no /rs:no /m normal /j """ & JobName & """ /l:f /f """ & FileName & """ /d """ & Description & """"
 		LogMessage Now() & vbTab & vbTab & CommandLine
+		If TestMode Then Exit Sub
 		ExitCode = objShell.Run("cmd /c " & CommandLine, 8, True)
 
 		SourceLog = GetLogFile(StartTimeStamp, JobName)
@@ -399,11 +422,14 @@ exit sub
 	Set objShell = Nothing
 End Sub
 'Script can be debugged by opening a CMD window and executing the following command (note that the two slashes are not a typo)...
-'	cscript Backup.vbs //X
+'	cscript//X Backup.vbs
+'or... (Note that arguments are enclosed in double-quotes due to embedded spaces, and arguments are separated by spaces - not commas)
+'	cscript//X Backup.vbs "@C:\Documents and Settings\All Users\Documents\My Music - Rock - Rolling Stones.bks" "D:\Backups\GZPR141\My Music - Rock - Rolling Stones, The.bkf" "My Music - Rolling Stones, The" "My Music - Rolling Stones, The"
 Dim vArg, aArgs(), iCount
 Dim SharedDocuments, BackupFolder, AltBackupFolder
-Dim iJob, totalJobs
+Dim iJob, totalJobs, TestMode
 
+TestMode = True
 SharedDocuments = GetEnvironmentVariable("SharedDocuments")
 BackupFolder = GetEnvironmentVariable("BackupFolder")
 AltBackupFolder = GetEnvironmentVariable("AltBackupFolder")
@@ -439,7 +465,7 @@ Else
         Case "Sunday"
             totalJobs = 2
         Case "Monday"
-            totalJobs = 18
+            totalJobs = 37
         Case "Tuesday"
             totalJobs = 16
         Case "Wednesday"
@@ -458,23 +484,11 @@ Else
     Select Case WeekDayName(WeekDay(Date))
         Case "Sunday"
         Case "Monday"
-            'DoBackup SharedDocuments & "\My Music",                                   AltBackupFolder & "\Shared Documents - My Music.bkf",      "My Music",                  "My Music",                  iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Jimmy Buffett.bks",   AltBackupFolder & "\My Music - Rock - Jimmy Buffett.bkf",  "My Music - Jimmy Buffett",  "My Music - Jimmy Buffett",  iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Eric Clapton.bks",    AltBackupFolder & "\My Music - Rock - Eric Clapton.bkf",   "My Music - Eric Clapton",   "My Music - Eric Clapton",   iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - ELO.bks",             AltBackupFolder & "\My Music - Rock - ELO.bkf",            "My Music - ELO",            "My Music - ELO",            iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Fleetwood Mac.bks",   AltBackupFolder & "\My Music - Rock - Fleetwood Mac.bkf",  "My Music - Fleetwood Mac",  "My Music - Fleetwood Mac",  iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Genesis.bks",         AltBackupFolder & "\My Music - Rock - Genesis.bkf",        "My Music - Genesis",        "My Music - Genesis",        iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Elton John.bks",      AltBackupFolder & "\My Music - Rock - Elton John.bkf",     "My Music - Elton John",     "My Music - Elton John",     iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Kinks.bks",           AltBackupFolder & "\My Music - Rock - Kinks.bkf",          "My Music - Kinks",          "My Music - Kinks",          iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Alan Parsons.bks",    AltBackupFolder & "\My Music - Rock - Alan Parsons.bkf",   "My Music - Alan Parsons",   "My Music - Parsons, Alan",  iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Pink Floyd.bks",      AltBackupFolder & "\My Music - Rock - Pink Floyd.bkf",     "My Music - Pink Floyd",     "My Music - Pink Floyd",     iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Queen.bks",           AltBackupFolder & "\My Music - Rock - Queen.bkf",          "My Music - Queen",          "My Music - Queen",          iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Rush.bks",            AltBackupFolder & "\My Music - Rock - Rush.bkf",           "My Music - Rush",           "My Music - Rush",           iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Styx.bks",            AltBackupFolder & "\My Music - Rock - Styx.bkf",           "My Music - Styx",           "My Music - Styx",           iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Joe Walsh.bks",       AltBackupFolder & "\My Music - Rock - Joe Walsh.bkf",      "My Music - Joe Walsh",      "My Music - Joe Walsh",      iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock - Yes.bks",             AltBackupFolder & "\My Music - Rock - Yes.bkf",            "My Music - Yes",            "My Music - Yes",            iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music - Rock.bks",                   AltBackupFolder & "\My Music - Rock.bkf",                  "My Music - Rock",           "My Music - Rock",           iJob, totalJobs:    iJob = iJob + 1
-            DoBackup "@" & SharedDocuments & "\My Music.bks",                          AltBackupFolder & "\My Music.bkf",                         "My Music",                  "My Music",                  iJob, totalJobs:    iJob = iJob + 1
+			'DoBackup bks (can't contain commas),											FileName,														JobName,							Description,						iJob, totalJobs
+            'DoBackup SharedDocuments & "\My Music",										AltBackupFolder & "\Shared Documents - My Music.bkf",			"My Music",							"My Music",							iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Yes.bks",					AltBackupFolder & "\My Music - Rock - Yes.bkf",					"My Music - Yes",					"My Music - Yes",					iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "@" & SharedDocuments & "\My Music - Rock.bks",						AltBackupFolder & "\My Music - Rock.bkf",						"My Music - Rock",					"My Music - Rock",					iJob, totalJobs:    iJob = iJob + 1
+            DoBackup "@" & SharedDocuments & "\My Music.bks",								AltBackupFolder & "\My Music.bkf",								"My Music",							"My Music",							iJob, totalJobs:    iJob = iJob + 1
 
             'DoBackup SharedDocuments & "\Game Images",                  AltBackupFolder & "\Shared Documents - Game Images.bkf",    "Game Images",    "Game Images",                                        iJob, totalJobs:    iJob = iJob + 1
             'DoBackup SharedDocuments & "\Software Images",              AltBackupFolder & "\Shared Documents - Software Images.bkf","Software Images","Software Images",                                    iJob, totalJobs:    iJob = iJob + 1

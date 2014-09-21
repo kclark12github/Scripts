@@ -5,6 +5,8 @@
 '
 '   Modification History:
 '   Date:       Developer:		Description:
+'	12/28/09	Ken Clark		Added TestMode;
+'								Made file changes trigger backups rather than directory time-stamp differences;
 '	06/18/09	Ken Clark		Added logic to avoid backups for inactive content;
 '								Added LogMessage;
 '								Added object/memory cleanup;
@@ -71,18 +73,20 @@ Private Sub LogMessage(Message)
 	Const ForAppending = 8
 	Const UnicodeFormat = -1
 	Const MB = 1048576
-	Dim objStdOut, objFSO, objFile, LogFile
+	Dim objStdOut, objFSO, objFile, LogFile, BaseName
     Set objStdOut = WScript.StdOut
 	If Not IsNull(objStdOut) Then objStdOut.WriteLine Message
 	
-	LogFile = BackupFolder & "\Backup.log"
+	BaseName = "Backup"
+	
+	LogFile = BackupFolder & "\" & BaseName & ".log"
     Set objFSO = CreateObject("Scripting.FileSystemObject")
     If objFSO.FileExists(LogFile) Then
 		Set objFile = objFSO.GetFile(LogFile)
 		If objFile.Size > 10*MB Then
             Dim dtModified, NewFileName
             dtModified = objFile.DateLastModified
-            NewFileName = BackupFolder & "\Backup." & FormatTimeStamp(dtModified) & ".log"
+            NewFileName = BackupFolder & "\" & BaseName & "." & FormatTimeStamp(dtModified) & ".log"
             objFSO.MoveFile LogFile, NewFileName
 
             'If we successfully renamed our existing file, now police any older files that need to be deleted...
@@ -95,13 +99,27 @@ Private Sub LogMessage(Message)
         Set objFile = Nothing
     End If
     
-	Set objFile = objFSO.OpenTextFile(BackupFolder & "\Backup.log", ForAppending, True)
+	Set objFile = objFSO.OpenTextFile(BackupFolder & "\" & BaseName & ".log", ForAppending, True)
 	objFile.WriteLine(Message)
 	objFile.Close
 	
 	Set objFile = Nothing
 	Set objFSO = Nothing
     Set objStdOut = Nothing
+End Sub
+Private Sub DisplayHelp
+    LogMessage "Usage:"
+    LogMessage "Backup.vbs [<bks>, <FileName>, <JobName>, <Description>] | TEST"
+    LogMessage " (either none or all arguments accepted)"
+    LogMessage "  bks             Specifies the name of the backup selection file (.bks file) to be used for this backup operation. The @ character"
+    LogMessage "                  must precede the name of the backup selection file. A backup selection file contains information on the files and"
+    LogMessage "                  folders you have selected for backup. You have to create the file using the graphical user interface (GUI)"
+    LogMessage "                  version of Backup. If no bks file is to be used, this argument may be ""systemstate"" or the pathname of the folder"
+    LogMessage "                  being backed-up."
+    LogMessage "  FileName        Logical disk path and file name."
+    LogMessage "  JobName         Specifies the job name to be used in the log file. The job name usually describes the files and folders you are"
+    LogMessage "                  backing up in the current backup job as well as the date and time you backed up the files."
+    LogMessage "  Description     Specifies a label for backup set. "
 End Sub
 Public Function IsDST()
 	strComputer = "."
@@ -308,6 +326,17 @@ Private Function CheckDateModified(objFile, excluded, creationDate, FolderCount,
 		Case Else
 	End Select
 
+    Set objFSO = CreateObject("Scripting.FileSystemObject")
+	If objFSO.FolderExists(Path) Then
+		FolderCount = FolderCount + 1
+		CheckDateModified = False 
+		Exit Function	'Do not check directories (make file changes trigger backups)
+	ElseIf TestMode Then
+		Dim objFSOFile
+		Set objFSOFile = objFSO.GetFile(Path)
+		LogMessage Now() & vbTab & vbTab & "Checking " & objFSOFile.Name & "..."
+	End If
+	
 	If Not IsNull(excluded) Then
 		For i = 1 To UBound(excluded)
 			If Right(excluded(i), 1) <> "\" And UCase(Path) = UCase(excluded(i)) Then CheckDateModified = False : Exit Function
@@ -344,6 +373,8 @@ Private Function ScanSubFolders(Folder, excluded, creationDate, FolderCount, Fil
 	Dim objWMIService, colFileList, objFile, varDate
 	Dim strComputer
 
+	If TestMode Then LogMessage Now() & vbTab & "Scanning " & Folder & "..."
+	
     ScanSubFolders = False
 	If CheckDateModified(Folder, excluded, creationDate, FolderCount, FileCount) Then ScanSubFolders = True : Exit Function
 	
@@ -397,13 +428,18 @@ Private Function SomethingToDo(bks, FileName)
 
 			For iIncluded = 1 To UBound(included)
 				If UCase(included(iIncluded)) = "SYSTEMSTATE" Then SomethingToDo = True : Exit Function
-				
+				Dim aExcluded
+				If iExcluded > 0 Then
+					aExcluded = excluded
+				Else
+					aExcluded = Null
+				End If
 				If Right(included(iIncluded), 1) = "\" Then
 					'We have a folder reference...
-					SomethingToDo = ScanSubfolders(objFSO.GetFolder(included(iIncluded)), excluded, creationDate, FolderCount, FileCount)
+					SomethingToDo = ScanSubfolders(objFSO.GetFolder(included(iIncluded)), aExcluded, creationDate, FolderCount, FileCount)
 				Else
 					'We have a file reference...
-					SomethingToDo = CheckDateModified(objFSO.GetFile(included(iIncluded)), excluded, creationDate, FolderCount, FileCount)
+					SomethingToDo = CheckDateModified(objFSO.GetFile(included(iIncluded)), aExcluded, creationDate, FolderCount, FileCount)
 				End If
 				'If we found something needing to be backed-up, no point in continuing, simply return...
 				If SomethingToDo Then Exit Function
@@ -442,6 +478,7 @@ Public Sub DoBackup(bks, FileName, JobName, Description, iJob, totalJobs)
 		
 		CommandLine = "NTBACKUP backup """ & bks & """ /v:yes /r:no /rs:no /m normal /j """ & JobName & """ /l:f /f """ & FileName & """ /d """ & Description & """"
 		LogMessage Now() & vbTab & vbTab & CommandLine
+		If TestMode Then Exit Sub
 		ExitCode = objShell.Run("cmd /c " & CommandLine, 8, True)
 
 		SourceLog = GetLogFile(StartTimeStamp, JobName)
@@ -473,35 +510,29 @@ End Sub
 '	cscript//X Backup.vbs "@C:\Documents and Settings\All Users\Documents\My Music - Rock - Rolling Stones.bks" "D:\Backups\GZPR141\My Music - Rock - Rolling Stones, The.bkf" "My Music - Rolling Stones, The" "My Music - Rolling Stones, The"
 Dim vArg, aArgs(), iCount
 Dim SharedDocuments, BackupFolder, AltBackupFolder
-Dim iJob, totalJobs
+Dim iJob, totalJobs, TestMode
 
+TestMode = False
 SharedDocuments = GetEnvironmentVariable("SharedDocuments")
 BackupFolder = GetEnvironmentVariable("BackupFolder")
 AltBackupFolder = GetEnvironmentVariable("AltBackupFolder")
 
 LogMessage "[Backup.vbs" & vbTab & Now() & "]"
 If WScript.Arguments.Count > 0 Then
-    If WScript.Arguments.Count <> 4 Then
-        If Not IsNull(objStdOut) Then 
-            LogMessage "Usage:"
-            LogMessage "Backup.vbs [<bks>, <FileName>, <JobName>, <Description>]"
-            LogMessage " (either none or all arguments accepted)"
-            LogMessage "  bks             Specifies the name of the backup selection file (.bks file) to be used for this backup operation. The @ character"
-            LogMessage "                  must precede the name of the backup selection file. A backup selection file contains information on the files and"
-            LogMessage "                  folders you have selected for backup. You have to create the file using the graphical user interface (GUI)"
-            LogMessage "                  version of Backup. If no bks file is to be used, this argument may be ""systemstate"" or the pathname of the folder"
-            LogMessage "                  being backed-up."
-            LogMessage "  FileName        Logical disk path and file name."
-            LogMessage "  JobName         Specifies the job name to be used in the log file. The job name usually describes the files and folders you are"
-            LogMessage "                  backing up in the current backup job as well as the date and time you backed up the files."
-            LogMessage "  Description     Specifies a label for backup set. "
-        End If
-        WScript.Quit
+	If WScript.Arguments.Count = 4 Then
+		ReDim aArgs(wscript.Arguments.Count - 1)
+		For iCount = 0 To WScript.Arguments.Count - 1
+		    aArgs(iCount) = WScript.Arguments(iCount)
+		Next
+	ElseIf WScript.Arguments.Count = 1 Then
+		If UCase(WScript.Arguments(0)) = "TEST" Then TestMode = True Else DisplayHelp() : WScript.Quit
+	Else
+		DisplayHelp()
+		WScript.Quit
     End If
-    ReDim aArgs(wscript.Arguments.Count - 1)
-    For iCount = 0 To WScript.Arguments.Count - 1
-        aArgs(iCount) = WScript.Arguments(iCount)
-    Next
+End If
+
+If WScript.Arguments.Count = 4 Then
     'DoBackup(bks, FileName, JobName, Description)
     DoBackup aArgs(0), aArgs(1), aArgs(2), aArgs(3), 1, 1
 Else
@@ -510,7 +541,7 @@ Else
         Case "Sunday"
             totalJobs = 2
         Case "Monday"
-            totalJobs = 18
+            totalJobs = 37
         Case "Tuesday"
             totalJobs = 16
         Case "Wednesday"
