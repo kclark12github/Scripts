@@ -168,6 +168,7 @@ Public Sub CleanUp(FileName)
 	Const wbemFlagForwardOnly = &h20
 
     Set objFSO = CreateObject("Scripting.FileSystemObject")
+    Set objStdOut = WScript.StdOut
     strComputer = "."
     Set objWMIService = GetObject("winmgmts:{impersonationLevel=impersonate}\\" & strComputer & "\root\cimv2")
     Set objBKF = objFSO.GetFile(FileName)
@@ -177,7 +178,7 @@ Public Sub CleanUp(FileName)
     Set colFiles = objWMIService.ExecQuery(SQLSource, "WQL", wbemFlagReturnImmediately + wbemFlagForwardOnly)
     For Each objFile in colFiles
 		If Left(objFile.Name, Len(BackupName)) = LCase(BackupName) And Left(objFile.Name, Len(BaseName)) <> LCase(BaseName) Then 
-			'Wscript.Echo objFile.Name
+			If Not IsNull(objStdOut) Then objStdOut.WriteLine "Deleting " & objFile.Name
 			objFSO.DeleteFile(objFile.Name), DeleteReadOnly
 		End If
     Next    
@@ -189,6 +190,8 @@ Public Sub DoBackup(bks, FileName, JobName, Description)
 
     Set objFSO = CreateObject("Scripting.FileSystemObject")
     Set objShell = CreateObject("WScript.Shell")
+    Set objStdOut = WScript.StdOut
+
     dtNow = Now()
     StartTimeStamp = DateDiff("s", BaseCTime(), dtNow)      
     If Not objFSO.FileExists(FileName) Then
@@ -199,14 +202,14 @@ Public Sub DoBackup(bks, FileName, JobName, Description)
     If objFile.Size = 0 Then objFSO.DeleteFile(objFile.Path)
     
     CommandLine = "NTBACKUP backup """ & bks & """ /v:yes /r:no /rs:no /m normal /j """ & JobName & """ /l:f /f """ & FileName & """ /d """ & Description & """"
-    'MsgBox("CommandLine: " & CommandLine)
+    If Not IsNull(objStdOut) Then WScript.StdOut.WriteLine CommandLine
     ExitCode = objShell.Run("cmd /c " & CommandLine, 8, True)
 
     SourceLog = GetLogFile(StartTimeStamp, JobName)
     If SourceLog <> vbNullString Then
 		Set objFile = objFSO.GetFile(FileName)
 		TargetLog = objFile.ParentFolder & "\" & objFSO.GetBaseName(objFile) & ".log"
-		'MsgBox "Copy """ & SourceLog & """ """ & TargetLog & """"
+		If Not IsNull(objStdOut) Then WScript.StdOut.WriteLine "Copy """ & SourceLog & """ """ & TargetLog & """"
 		objFSO.CopyFile SourceLog, TargetLog, OverwriteExisting
 
 		Success = True
@@ -221,54 +224,86 @@ Public Sub DoBackup(bks, FileName, JobName, Description)
 End Sub
 'Script can be debugged by opening a CMD window and executing the following command (note that the two slashes are not a typo)...
 '	cscript Backup.vbs //X
+Dim vArg, aArgs(), iCount
+Dim SharedDocuments, BackupFolder, AltBackupFolder
+Dim objStdOut
 
 SharedDocuments = GetEnvironmentVariable("SharedDocuments")
 BackupFolder = GetEnvironmentVariable("BackupFolder")
 AltBackupFolder = GetEnvironmentVariable("AltBackupFolder")
 
-'Every Day...
-DoBackup "@" & SharedDocuments & "\SystemState.bks",                BackupFolder & "\SystemState.bkf",                          "SystemState",                       "SystemState Backup"                                   '  5 minutes
-DoBackup SharedDocuments & "\Finance",                              BackupFolder & "\Shared Documents - Finance.bkf",           "Shared Documents - Finance",        "Full NT Backup of Shared Documents - Finance"         '  5 minutes
-Select Case WeekDayName(WeekDay(Date))
-    Case "Sunday"
-    Case "Monday"
-        'DoBackup SharedDocuments & "\My Music",                                    AltBackupFolder & "\Shared Documents - My Music.bkf",       "Shared Documents - My Music",                          "Full NT Backup of Shared Documents - My Music"
-        DoBackup "@" & SharedDocuments & "\My Music - Rock - Buffett, Jimmy.bks",   AltBackupFolder & "\My Music - Rock - Buffett, Jimmy.bkf",  "Shared Documents - My Music - Rock - Buffett, Jimmy",  "Full NT Backup of Shared Documents - My Music - Rock - Buffett, Jimmy"
-        DoBackup "@" & SharedDocuments & "\My Music - Rock - Clapton, Eric.bks",    AltBackupFolder & "\My Music - Rock - Clapton, Eric.bkf",   "Shared Documents - My Music - Rock - Clapton, Eric",   "Full NT Backup of Shared Documents - My Music - Rock - Clapton, Eric"
-        DoBackup "@" & SharedDocuments & "\My Music - Rock - ELO.bks",              AltBackupFolder & "\My Music - Rock - ELO.bkf",             "Shared Documents - My Music - Rock - ELO",             "Full NT Backup of Shared Documents - My Music - Rock - ELO"
-        DoBackup "@" & SharedDocuments & "\My Music - Rock - Fleetwood Mac.bks",    AltBackupFolder & "\My Music - Rock - Fleetwood Mac.bkf",   "Shared Documents - My Music - Rock - Fleetwood Mac",   "Full NT Backup of Shared Documents - My Music - Rock - Fleetwood Mac"
-        DoBackup "@" & SharedDocuments & "\My Music - Rock - Genesis.bks",          AltBackupFolder & "\My Music - Rock - Genesis.bkf",         "Shared Documents - My Music - Rock - Genesis",         "Full NT Backup of Shared Documents - My Music - Rock - Genesis"
-        DoBackup "@" & SharedDocuments & "\My Music - Rock - John, Elton.bks",      AltBackupFolder & "\My Music - Rock - John, Elton.bkf",     "Shared Documents - My Music - Rock - John, Elton",     "Full NT Backup of Shared Documents - My Music - Rock - John, Elton"
-        DoBackup "@" & SharedDocuments & "\My Music - Rock - Kinks.bks",            AltBackupFolder & "\My Music - Rock - Kinks.bkf",           "Shared Documents - My Music - Rock - Kinks",           "Full NT Backup of Shared Documents - My Music - Rock - Kinks"
-        DoBackup "@" & SharedDocuments & "\My Music - Rock - Parsons, Alan.bks",    AltBackupFolder & "\My Music - Rock - Parsons, Alan.bkf",   "Shared Documents - My Music - Rock - Parsons, Alan",   "Full NT Backup of Shared Documents - My Music - Rock - Parsons, Alan"
-        DoBackup "@" & SharedDocuments & "\My Music - Rock - Pink Floyd.bks",       AltBackupFolder & "\My Music - Rock - Pink Floyd.bkf",      "Shared Documents - My Music - Rock - Pink Floyd",      "Full NT Backup of Shared Documents - My Music - Rock - Pink Floyd"
-        DoBackup "@" & SharedDocuments & "\My Music - Rock - Queen.bks",            AltBackupFolder & "\My Music - Rock - Queen.bkf",           "Shared Documents - My Music - Rock - Queen",           "Full NT Backup of Shared Documents - My Music - Rock - Queen"
-        DoBackup "@" & SharedDocuments & "\My Music - Rock - Rush.bks",             AltBackupFolder & "\My Music - Rock - Rush.bkf",            "Shared Documents - My Music - Rock - Rush",            "Full NT Backup of Shared Documents - My Music - Rock - Rush"
-        DoBackup "@" & SharedDocuments & "\My Music - Rock - Styx.bks",             AltBackupFolder & "\My Music - Rock - Styx.bkf",            "Shared Documents - My Music - Rock - Styx",            "Full NT Backup of Shared Documents - My Music - Rock - Styx"
-        DoBackup "@" & SharedDocuments & "\My Music - Rock - Walsh, Joe.bks",       AltBackupFolder & "\My Music - Rock - Walsh, Joe.bkf",      "Shared Documents - My Music - Rock - Walsh, Joe",      "Full NT Backup of Shared Documents - My Music - Rock - Walsh, Joe"
-        DoBackup "@" & SharedDocuments & "\My Music - Rock - Yes.bks",              AltBackupFolder & "\My Music - Rock - Yes.bkf",             "Shared Documents - My Music - Rock - Yes",             "Full NT Backup of Shared Documents - My Music - Rock - Yes"
-        DoBackup "@" & SharedDocuments & "\My Music - Rock.bks",                    AltBackupFolder & "\My Music - Rock.bkf",                   "Shared Documents - My Music - Rock",                   "Full NT Backup of Shared Documents - My Music - Rock"
-        DoBackup "@" & SharedDocuments & "\My Music.bks",                           AltBackupFolder & "\My Music.bkf",                          "Shared Documents - My Music",                          "Full NT Backup of Shared Documents - My Music"
+Set objStdOut = WScript.StdOut
+If Not IsNull(objStdOut) Then objStdOut.WriteLine "[Backup.vbs]"
+If WScript.Arguments.Count > 0 Then
+    If WScript.Arguments.Count <> 4 Then
+        If Not IsNull(objStdOut) Then 
+            objStdOut.WriteLine "Usage:"
+            objStdOut.WriteLine "Backup.vbs [<bks>, <FileName>, <JobName>, <Description>]"
+            objStdOut.WriteLine " (either none or all arguments accepted)"
+            objStdOut.WriteLine "  bks             Specifies the name of the backup selection file (.bks file) to be used for this backup operation. The @ character"
+            objStdOut.WriteLine "                  must precede the name of the backup selection file. A backup selection file contains information on the files and"
+            objStdOut.WriteLine "                  folders you have selected for backup. You have to create the file using the graphical user interface (GUI)"
+            objStdOut.WriteLine "                  version of Backup. If no bks file is to be used, this argument may be ""systemstate"" or the pathname of the folder"
+            objStdOut.WriteLine "                  being backed-up."
+            objStdOut.WriteLine "  FileName        Logical disk path and file name."
+            objStdOut.WriteLine "  JobName         Specifies the job name to be used in the log file. The job name usually describes the files and folders you are"
+            objStdOut.WriteLine "                  backing up in the current backup job as well as the date and time you backed up the files."
+            objStdOut.WriteLine "  Description     Specifies a label for backup set. "
+        End If
+        WScript.Quit
+    End If
+    ReDim aArgs(wscript.Arguments.Count - 1)
+    For iCount = 0 To WScript.Arguments.Count - 1
+        aArgs(iCount) = WScript.Arguments(iCount)
+    Next
+    'DoBackup(bks, FileName, JobName, Description)
+    DoBackup aArgs(0), aArgs(1), aArgs(2), aArgs(3)
+Else
+    'Every Day...
+    DoBackup "@" & SharedDocuments & "\SystemState.bks",                BackupFolder & "\SystemState.bkf",                          "SystemState",                       "SystemState Backup"                 '  5 minutes
+    DoBackup SharedDocuments & "\Finance",                              BackupFolder & "\Shared Documents - Finance.bkf",           "Shared Documents - Finance",        "Shared Documents - Finance"         '  5 minutes
+    Select Case WeekDayName(WeekDay(Date))
+        Case "Sunday"
+        Case "Monday"
+            'DoBackup SharedDocuments & "\My Music",                                   AltBackupFolder & "\Shared Documents - My Music.bkf",       "My Music",                  "My Music"
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Jimmy Buffett.bks",   AltBackupFolder & "\My Music - Rock - Jimmy Buffett.bkf",  "My Music - Jimmy Buffett",  "My Music - Buffett, Jimmy"
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Eric Clapton.bks",    AltBackupFolder & "\My Music - Rock - Eric Clapton.bkf",   "My Music - Eric Clapton",   "My Music - Eric Clapton"
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - ELO.bks",             AltBackupFolder & "\My Music - Rock - ELO.bkf",            "My Music - ELO",            "My Music - ELO"
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Fleetwood Mac.bks",   AltBackupFolder & "\My Music - Rock - Fleetwood Mac.bkf",  "My Music - Fleetwood Mac",  "My Music - Fleetwood Mac"
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Genesis.bks",         AltBackupFolder & "\My Music - Rock - Genesis.bkf",        "My Music - Genesis",        "My Music - Genesis"
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Elton John.bks",      AltBackupFolder & "\My Music - Rock - Elton John.bkf",     "My Music - Elton John",     "My Music - Elton John"
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Kinks.bks",           AltBackupFolder & "\My Music - Rock - Kinks.bkf",          "My Music - Kinks",          "My Music - Kinks"
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Alan Parsons.bks",    AltBackupFolder & "\My Music - Rock - Alan Parsons.bkf",   "My Music - Alan Parsons",   "My Music - Parsons, Alan"
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Pink Floyd.bks",      AltBackupFolder & "\My Music - Rock - Pink Floyd.bkf",     "My Music - Pink Floyd",     "My Music - Pink Floyd"
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Queen.bks",           AltBackupFolder & "\My Music - Rock - Queen.bkf",          "My Music - Queen",          "My Music - Queen"
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Rush.bks",            AltBackupFolder & "\My Music - Rock - Rush.bkf",           "My Music - Rush",           "My Music - Rush"
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Styx.bks",            AltBackupFolder & "\My Music - Rock - Styx.bkf",           "My Music - Styx",           "My Music - Styx"
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Joe Walsh.bks",       AltBackupFolder & "\My Music - Rock - Joe Walsh.bkf",      "My Music - Joe Walsh",      "My Music - Joe Walsh"
+            DoBackup "@" & SharedDocuments & "\My Music - Rock - Yes.bks",             AltBackupFolder & "\My Music - Rock - Yes.bkf",            "My Music - Yes",            "My Music - Yes"
+            DoBackup "@" & SharedDocuments & "\My Music - Rock.bks",                   AltBackupFolder & "\My Music - Rock.bkf",                  "My Music - Rock",           "My Music - Rock"
+            DoBackup "@" & SharedDocuments & "\My Music.bks",                          AltBackupFolder & "\My Music.bkf",                         "My Music",                  "My Music"
 
-        'DoBackup SharedDocuments & "\Game Images",                  AltBackupFolder & "\Shared Documents - Game Images.bkf",    "Shared Documents - Game Images",    "Full NT Backup of Shared Documents - Game Images"     '360 minutes+
-        'DoBackup SharedDocuments & "\Software Images",              AltBackupFolder & "\Shared Documents - Software Images.bkf","Shared Documents - Software Images","Full NT Backup of Shared Documents - Software Images" ' 15 minutes
-    Case "Tuesday"
-        DoBackup "C:\Documents and Settings\kclark\My Documents",   BackupFolder & "\GZPR141 My Documents.bkf",                 "GZPR141 My Documents",              "Full NT Backup of GZPR141 My Documents"               ' 30 minutes
-        DoBackup "C:\Projects",                                     BackupFolder & "\Projects.bkf",                             "Projects",                          "Full NT Backup of Projects"                           ' 40 minutes
-        DoBackup "@" & SharedDocuments & "\SharedDocuments.bks",    BackupFolder & "\Shared Documents.bkf",                     "Shared Documents",                  "Full NT Backup of Shared Documents"                   '210 minutes
-        DoBackup SharedDocuments & "\Downloads",                    BackupFolder & "\Shared Documents - Downloads.bkf",         "Shared Documents - Downloads",      "Full NT Backup of Shared Documents - Downloads"       '160 minutes
-        DoBackup SharedDocuments & "\My Pictures",                  BackupFolder & "\Shared Documents - My Pictures.bkf",       "Shared Documents - My Pictures",    "Full NT Backup of Shared Documents - My Pictures"     '  5 minutes
-        DoBackup "@" & SharedDocuments & "\My Profile.bks",         BackupFolder & "\My Profile.bkf",                           "My Profile",                        "Full NT Backup of My Profile"                         ' 35 minutes
-    Case "Wednesday"
-        DoBackup "C:\WebShare\wwwroot",                             BackupFolder & "\WebShare - wwwroot.bkf",                   "WebShare - wwwroot",                "Full NT Backup of WebShare - wwwroot"                 ' 15 minutes
-        DoBackup "C:\WebShare\wwwArchive",                          BackupFolder & "\WebShare - wwwArchive.bkf",                "WebShare - wwwArchive",             "Full NT Backup of WebShare - wwwArchive"              '300 minutes
-    Case "Thursday"
-        'VSSArchive Runs Thursdays...
-    Case "Friday"
-        'FileListDBs Run Fridays...
-    Case "Saturday"
-End Select
+            'DoBackup SharedDocuments & "\Game Images",                  AltBackupFolder & "\Shared Documents - Game Images.bkf",    "Game Images",    "Game Images"     '360 minutes+
+            'DoBackup SharedDocuments & "\Software Images",              AltBackupFolder & "\Shared Documents - Software Images.bkf","Software Images","Software Images" ' 15 minutes
+        Case "Tuesday"
+            DoBackup "C:\Documents and Settings\kclark\My Documents",   BackupFolder & "\GZPR141 My Documents.bkf",                 "GZPR141 My Documents",              "GZPR141 My Documents"               ' 30 minutes
+            DoBackup "C:\Projects",                                     BackupFolder & "\Projects.bkf",                             "Projects",                          "Projects"                           ' 40 minutes
+            DoBackup "@" & SharedDocuments & "\SharedDocuments.bks",    BackupFolder & "\Shared Documents.bkf",                     "Shared Documents",                  "Shared Documents"                   '210 minutes
+            DoBackup SharedDocuments & "\Downloads",                    BackupFolder & "\Shared Documents - Downloads.bkf",         "Shared Documents - Downloads",      "Downloads"       '160 minutes
+            DoBackup SharedDocuments & "\My Pictures",                  BackupFolder & "\Shared Documents - My Pictures.bkf",       "Shared Documents - My Pictures",    "My Pictures"     '  5 minutes
+            DoBackup "@" & SharedDocuments & "\My Profile.bks",         BackupFolder & "\My Profile.bkf",                           "My Profile",                        "My Profile"                         ' 35 minutes
+        Case "Wednesday"
+            DoBackup "C:\WebShare\wwwroot",                             BackupFolder & "\WebShare - wwwroot.bkf",                   "WebShare - wwwroot",                "WebShare - wwwroot"                 ' 15 minutes
+            DoBackup "C:\WebShare\wwwArchive",                          BackupFolder & "\WebShare - wwwArchive.bkf",                "WebShare - wwwArchive",             "WebShare - wwwArchive"              '300 minutes
+        Case "Thursday"
+            'VSSArchive Runs Thursdays...
+        Case "Friday"
+            'FileListDBs Run Fridays...
+        Case "Saturday"
+    End Select
+    'Remote Machine...
+    ''DoBackup "\\EUKB6\My Documents",                            BackupFolder & "\EUKB6 My Documents.bkf",                   "EUKB6 My Documents",                   "Full NT Backup of EUKB6 My Documents"                         ' minutes
+End If
 
-
-'Remote Machine...
-''DoBackup "\\EUKB6\My Documents",                            BackupFolder & "\EUKB6 My Documents.bkf",                   "EUKB6 My Documents",                   "Full NT Backup of EUKB6 My Documents"                         ' minutes
+If Not IsNull(objStdOut) Then objStdOut.Close
+WScript.Quit
