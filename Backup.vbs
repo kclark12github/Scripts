@@ -49,6 +49,51 @@
 '       Systemroot\System32\Ntmsdata
 '       Systemroot\System32\Remotestorage
 '     This ensures that all Removable Storage and Remote Storage data can be restored.
+Public Function IsDST()
+	strComputer = "."
+	Set objWMIService = GetObject("winmgmts:\\" & strComputer & "\root\CIMV2")
+	Set colItems = objWMIService.ExecQuery("SELECT * FROM Win32_ComputerSystem")
+	For Each objItem In colItems
+	  'WScript.Echo "Current Time Zone (Hours Offset From GMT): " & (objItem.CurrentTimeZone / 60)
+	  'WScript.Echo "Daylight Saving In Effect: " & objItem.DaylightInEffect
+	  IsDST = objItem.DaylightInEffect
+	  Exit Function
+	Next
+End Function
+Public Function BaseCTime()
+	'CTime := # Seconds since 01/01/1970 GMT (adjusted for EST/EDT)...
+	If IsDST() Then
+		BaseCTime = #12/31/1969 8:00:00 PM#
+	Else
+		BaseCTime = #12/31/1969 7:00:00 PM#
+	End If
+End Function
+Public Function FormatCTime(CTime)
+	TimeStamp = DateAdd("s", CTime, BaseCTime())
+    iYear = Year(TimeStamp)
+    iMonth = Month(TimeStamp)
+    iDay = Day(TimeStamp)
+    iHour = Hour(TimeStamp)
+    iMinute = Minute(TimeStamp)
+    iSecond = Second(TimeStamp)
+    If iHour > 12 Then AMPM = "PM":iHour = iHour - 12 Else AMPM = "AM"
+    If iHour = 0 then iHour = "12"
+    
+    if iMonth < 10 then FormatCTime = FormatCTime & "0"
+    FormatCTime = FormatCTime & iMonth & "/"
+    if iDay < 10 then FormatCTime = FormatCTime & "0"
+    FormatCTime = FormatCTime & iDay & "/"
+    FormatCTime = FormatCTime & iYear
+    
+    FormatCTime = FormatCTime & " "
+    if iHour < 10 then FormatCTime = FormatCTime & "0"
+    FormatCTime = FormatCTime & iHour & ":"
+    if iMinute < 10 then FormatCTime = FormatCTime & "0"
+    FormatCTime = FormatCTime & iMinute & ":"
+    if iSecond < 10 then FormatCTime = FormatCTime & "0"
+    FormatCTime = FormatCTime & iSecond
+    FormatCTime = FormatCTime & " " & AMPM
+End Function
 Public Function FormatTimeStamp(TimeStamp)
     iYear = Year(TimeStamp)
     iMonth = Month(TimeStamp)
@@ -102,7 +147,7 @@ Public Function GetLogFile(StartTimeStamp, MyJobName)
     For Each subkey In arrSubKeys
         oReg.GetStringValue HKEY_CURRENT_USER, "Software\Microsoft\Ntbackup\Log Files\" & subkey, "Job Name", JobName
         oReg.GetDWORDValue HKEY_CURRENT_USER, "Software\Microsoft\Ntbackup\Log Files\" & subkey, "Date/Time Used", DateTimeUsed
-        If DateTimeUsed > StartTimeStamp Or UCase(JobName) = UCase(MyJobName) Then
+        If DateTimeUsed > StartTimeStamp Then 'Or UCase(JobName) = UCase(MyJobName) Then
             Set objAppShell = CreateObject("Shell.Application")
             Set objFolder = objAppShell.Namespace(LOCAL_APPLICATION_DATA)
             Set objFolderItem = objFolder.Self
@@ -145,7 +190,7 @@ Public Sub DoBackup(bks, FileName, JobName, Description)
     Set objFSO = CreateObject("Scripting.FileSystemObject")
     Set objShell = CreateObject("WScript.Shell")
     dtNow = Now()
-    StartTimeStamp = DateDiff("s", #12/31/1969 7:00:00 PM#, dtNow)      'CTime := # Seconds since 01/01/1970 GMT (adjusted for EST)...
+    StartTimeStamp = DateDiff("s", BaseCTime(), dtNow)      
     If Not objFSO.FileExists(FileName) Then
         Set objFile = objFSO.CreateTextFile(FileName)                   'Create a dummy file to ease FileName construction...
     End If
