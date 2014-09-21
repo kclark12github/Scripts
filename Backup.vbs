@@ -1,10 +1,12 @@
 'Backup.vbs
 '	Visual Basic Script Used to Automate Backups (NTBACKUP) on a Weekly Basis...
-'   Copyright © 2006-2009, Ken Clark
+'   Copyright © 2006-2010, Ken Clark
 '*********************************************************************************************************************************
 '
 '   Modification History:
 '   Date:       Developer:		Description:
+'	02/15/10	Ken Clark		Corrected ScanSubFolders which now must contain the logic formerly required in CheckDateModified
+'								but made obsolete when file vs. directory change of 12/28/09 was implemented;
 '	12/28/09	Ken Clark		Added TestMode;
 '								Made file changes trigger backups rather than directory time-stamp differences;
 '	06/18/09	Ken Clark		Added logic to avoid backups for inactive content;
@@ -336,7 +338,7 @@ Private Function CheckDateModified(objFile, excluded, creationDate, FolderCount,
 		Set objFSOFile = objFSO.GetFile(Path)
 		LogMessage Now() & vbTab & vbTab & "Checking " & objFSOFile.Name & "..."
 	End If
-	
+	'This code is now obsolete due to the fact that we don't look at folder date-time stamps to determine backup worthiness (only files)...
 	If Not IsNull(excluded) Then
 		For i = 1 To UBound(excluded)
 			If Right(excluded(i), 1) <> "\" And UCase(Path) = UCase(excluded(i)) Then CheckDateModified = False : Exit Function
@@ -378,6 +380,20 @@ Private Function ScanSubFolders(Folder, excluded, creationDate, FolderCount, Fil
     ScanSubFolders = False
 	If CheckDateModified(Folder, excluded, creationDate, FolderCount, FileCount) Then ScanSubFolders = True : Exit Function
 	
+	Select Case TypeName(Folder)
+		Case "SWbemObjectEx"
+			Path = Folder.Name
+		Case "File", "Folder"
+			Path = Folder.Path
+		Case Else
+	End Select
+	If Not IsNull(excluded) Then
+		For i = 1 To UBound(excluded)
+			If Right(excluded(i), 1) <> "\" And UCase(Path) = UCase(excluded(i)) Then ScanSubFolders = False : Exit Function
+		    If Right(excluded(i), 1) = "\" And UCase(Path) = Left(UCase(excluded(i)), Len(excluded(i))-1) Then ScanSubFolders = False : Exit Function
+		Next
+	End If
+
 	'strComputer = "."
 	'Set objWMIService = GetObject("winmgmts:\\" & strComputer & "\root\CIMV2")
     'Set colFileList = objWMIService.ExecQuery("ASSOCIATORS OF {Win32_Directory.Name='" & Folder & "'} Where ResultClass = CIM_DataFile")
