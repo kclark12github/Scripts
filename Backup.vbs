@@ -6,6 +6,8 @@
 '   Modification History:
 '   Date:       Developer:		Description:
 '	06/18/09	Ken Clark		Added logic to avoid backups for inactive content;
+'								Added LogMessage;
+'								Added object/memory cleanup;
 '								Added Modification History;
 '	05/21/09	Ken Clark		Split Downloads backup into multiple subdirectory-based backups;
 '	12/31/08	Ken Clark		Added time-stamps on output as well as progress info;
@@ -65,6 +67,21 @@
 '       Systemroot\System32\Ntmsdata
 '       Systemroot\System32\Remotestorage
 '     This ensures that all Removable Storage and Remote Storage data can be restored.
+Private Sub LogMessage(Message)
+	Const ForAppending = 8
+	Const UnicodeFormat = -1
+	Dim objStdOut, objFSO, objFile
+    Set objStdOut = WScript.StdOut
+	If Not IsNull(objStdOut) Then objStdOut.WriteLine Message
+    Set objFSO = CreateObject("Scripting.FileSystemObject")
+	Set objFile = objFSO.OpenTextFile(BackupFolder & "\Backup.log", ForAppending, True)
+	objFile.WriteLine(Message)
+	objFile.Close
+	
+	Set objFile = Nothing
+	Set objFSO = Nothing
+    Set objStdOut = Nothing
+End Sub
 Public Function IsDST()
 	strComputer = "."
 	Set objWMIService = GetObject("winmgmts:\\" & strComputer & "\root\CIMV2")
@@ -73,8 +90,12 @@ Public Function IsDST()
 	  'WScript.Echo "Current Time Zone (Hours Offset From GMT): " & (objItem.CurrentTimeZone / 60)
 	  'WScript.Echo "Daylight Saving In Effect: " & objItem.DaylightInEffect
 	  IsDST = objItem.DaylightInEffect
-	  Exit Function
+	  Exit For
 	Next
+
+	Set colItems = Nothing
+	Set objItem = Nothing
+	Set objWMIService = Nothing
 End Function
 Public Function BaseCTime()
 	'CTime := # Seconds since 01/01/1970 GMT (adjusted for EST/EDT)...
@@ -140,8 +161,12 @@ Public Function GetEnvironmentVariable(VariableName)
 	Set colItems = objWMIService.ExecQuery("SELECT * FROM Win32_Environment Where Name='" & VariableName & "'", "WQL", wbemFlagReturnImmediately + wbemFlagForwardOnly)
 	For Each objItem In colItems
 	    GetEnvironmentVariable = objItem.VariableValue
-	    Exit Function
+	    Exit For
 	Next
+
+	Set colItems = Nothing
+	Set objItem = Nothing
+	Set objWMIService = Nothing
 End Function
 Public Function GetLogFile(StartTimeStamp, MyJobName)
     Const LOCAL_APPLICATION_DATA = &H1c&
@@ -177,14 +202,17 @@ Public Function GetLogFile(StartTimeStamp, MyJobName)
             Exit For
         End If
     Next
+
+	Set objAppShell = Nothing
+	Set objFolder = Nothing
+	Set objFolderItem = Nothing
+	Set oReg = Nothing
 End Function
 Public Function GetCreationDate(bksPath)
 	Dim strComputer, objWMIService, FSO, objFile
 	Dim ParentFolder, BaseName, Extension
 	Dim colFileList, varDate
-	Dim objStdOut
 	
-    Set objStdOut = WScript.StdOut
 	strComputer = "."
 	Set objWMIService = GetObject("winmgmts:\\" & strComputer & "\root\CIMV2")
 
@@ -202,18 +230,24 @@ Public Function GetCreationDate(bksPath)
 
 	'Note that we're not currently handling DST...
 	
-	'objStdOut.WriteLine "Attempting to find CreationDate for " & bksPath & "..."
+	'LogMessage "Attempting to find CreationDate for " & bksPath & "..."
     Set colFileList = objWMIService.ExecQuery("ASSOCIATORS OF {Win32_Directory.Name='" & ParentFolder & "'} Where ResultClass = CIM_DataFile")
     For Each objFile In colFileList
 		If UCase(Left(objFile.FileName, Len(BaseName))) = UCase(BaseName) And UCase(objFile.Extension) = UCase(Extension) Then
-			'objStdOut.WriteLine Now() & vbTab & objFile.FileName & "." & objFile.Extension & " (" & TypeName(objFile) & ")"
+			'LogMessage Now() & vbTab & objFile.FileName & "." & objFile.Extension & " (" & TypeName(objFile) & ")"
             Set varDate = CreateObject("WbemScripting.SWbemDateTime")
             varDate.Value = objFile.CreationDate
-            'objStdOut.WriteLine Now() & vbTab & varDate.GetVarDate(True) & " (" & objFile.CreationDate & ") - " & objFile.Name
+            'LogMessage Now() & vbTab & varDate.GetVarDate(True) & " (" & objFile.CreationDate & ") - " & objFile.Name
             GetCreationDate = varDate.GetVarDate(True)
-            Exit Function
+            Set varDate = Nothing
+            Exit For
         End If
     Next
+
+	Set FSO = Nothing
+	Set colFileList = Nothing
+	Set objFile = Nothing
+	Set objWMIService = Nothing
 End Function
 Public Sub CleanUp(FileName)
     Const DeleteReadOnly = TRUE
@@ -221,7 +255,6 @@ Public Sub CleanUp(FileName)
 	Const wbemFlagForwardOnly = &h20
 
     Set objFSO = CreateObject("Scripting.FileSystemObject")
-    Set objStdOut = WScript.StdOut
     strComputer = "."
     Set objWMIService = GetObject("winmgmts:{impersonationLevel=impersonate}\\" & strComputer & "\root\cimv2")
     Set objBKF = objFSO.GetFile(FileName)
@@ -231,13 +264,19 @@ Public Sub CleanUp(FileName)
     Set colFiles = objWMIService.ExecQuery(SQLSource, "WQL", wbemFlagReturnImmediately + wbemFlagForwardOnly)
     For Each objFile in colFiles
 		If Left(objFile.Name, Len(BackupName)) = LCase(BackupName) And Left(objFile.Name, Len(BaseName)) <> LCase(BaseName) Then 
-			If Not IsNull(objStdOut) Then objStdOut.WriteLine Now() & vbTab & "Deleting " & objFile.Name
+			LogMessage Now() & vbTab & "Deleting " & objFile.Name
 			objFSO.DeleteFile(objFile.Name), DeleteReadOnly
 		End If
     Next    
+
+	Set objFSO = Nothing
+	Set objBKF = Nothing
+	Set colFiles = Nothing
+	Set objFile = Nothing
+	Set objWMIService = Nothing
 End Sub
 Private Function CheckDateModified(objFile, excluded, creationDate, FolderCount, FileCount)
-	Dim objFSO, objStdOut, varDate, i
+	Dim objFSO, varDate, i
 	Dim Path, LastModified
 
 	Select Case TypeName(objFile)
@@ -260,53 +299,60 @@ Private Function CheckDateModified(objFile, excluded, creationDate, FolderCount,
 			Set varDate = CreateObject("WbemScripting.SWbemDateTime")
 			varDate.Value = objFile.LastModified
 			LastModified = varDate.GetVarDate(True)
+			Set varDate = Nothing
 		Case "File", "Folder"
 			LastModified = objFile.DateLastModified
 		Case Else
 	End Select
 	CheckDateModified = CBool(LastModified > creationDate)
 	If Not CheckDateModified Then
-	Select Case TypeName(objFile)
-		Case "SWbemObjectEx"
-			FileCount = FileCount + 1
-		Case "File"
-			FileCount = FileCount + 1
-		Case "Folder"
-			FolderCount = FolderCount + 1
-		Case Else
-	End Select
+		Select Case TypeName(objFile)
+			Case "SWbemObjectEx"
+				FileCount = FileCount + 1
+			Case "File"
+				FileCount = FileCount + 1
+			Case "Folder"
+				FolderCount = FolderCount + 1
+			Case Else
+		End Select
+	Else
+		LogMessage Now() & vbTab & "Found " & Path & " modified (" & LastModified & ") after " & creationDate
 	End If
 End Function
 Private Function ScanSubFolders(Folder, excluded, creationDate, FolderCount, FileCount)
 	Dim objWMIService, colFileList, objFile, varDate
 	Dim strComputer
 
+    ScanSubFolders = False
 	If CheckDateModified(Folder, excluded, creationDate, FolderCount, FileCount) Then ScanSubFolders = True : Exit Function
 	
 	strComputer = "."
 	Set objWMIService = GetObject("winmgmts:\\" & strComputer & "\root\CIMV2")
     Set colFileList = objWMIService.ExecQuery("ASSOCIATORS OF {Win32_Directory.Name='" & Folder & "'} Where ResultClass = CIM_DataFile")
     For Each objFile In colFileList
-		If CheckDateModified(objFile, excluded, creationDate, FolderCount, FileCount) Then ScanSubFolders = True : Exit Function
+		If CheckDateModified(objFile, excluded, creationDate, FolderCount, FileCount) Then ScanSubFolders = True : Exit For
     Next
-    For Each Subfolder in Folder.SubFolders
-        If ScanSubFolders(Subfolder, excluded, creationDate, FolderCount, FileCount) Then Exit For
-    Next
-    ScanSubFolders = False
+    If Not ScanSubFolders Then
+		For Each Subfolder in Folder.SubFolders
+		    If ScanSubFolders(Subfolder, excluded, creationDate, FolderCount, FileCount) Then Exit For
+		Next
+	End If
+
+	Set colFileList = Nothing
+	Set objFile = Nothing
+	Set objWMIService = Nothing
 End Function
 Private Function SomethingToDo(bks, FileName)
 	Const ForReading = 1
 	Const UnicodeFormat = -1
-	Dim objFSO, objStdOut, creationDate, FolderCount, FileCount, strLine, included(), excluded()
+	Dim objFSO, creationDate, FolderCount, FileCount, strLine, included(), excluded()
     Set objFSO = CreateObject("Scripting.FileSystemObject")
-	Set dtmTargetDate = CreateObject("WbemScripting.SWbemDateTime")
-    Set objStdOut = WScript.StdOut
 
 	SomethingToDo = True
 
 	creationDate = GetCreationDate(FileName)
 	If Not IsNull(creationDate) Then
-		'objStdOut.WriteLine "Creation Date: " & creationDate
+		'LogMessage "Creation Date: " & creationDate
 		FolderCount = 0
 		FileCount = 0
 		If Left(bks, 1) = "@" Then
@@ -344,9 +390,14 @@ Private Function SomethingToDo(bks, FileName)
 			SomethingToDo = ScanSubfolders(objFSO.GetFolder(bks), Null, creationDate, FolderCount, FileCount)
 		End If
 		If Not SomethingToDo Then 
-			If Not IsNull(objStdOut) Then WScript.StdOut.WriteLine Now() & vbTab & vbTab & "Checked " & FormatNumber(FileCount,0,,,vbTrue) & " Files (in " & FormatNumber(FolderCount,0,,,vbTrue) & " Folders) - Found nothing new to backup..."
+			LogMessage Now() & vbTab & "Checked " & FormatNumber(FileCount,0,,,vbTrue) & " Files (in " & FormatNumber(FolderCount,0,,,vbTrue) & " Folders) - Found nothing new to backup..."
 		End If
 	End If
+
+	Set objFSO = Nothing
+	Set objFile = Nothing
+	ReDim excluded(0)
+	ReDim included(0)
 End Function
 Public Sub DoBackup(bks, FileName, JobName, Description, iJob, totalJobs)
 	Const ForReading = 1
@@ -355,7 +406,6 @@ Public Sub DoBackup(bks, FileName, JobName, Description, iJob, totalJobs)
 
     Set objFSO = CreateObject("Scripting.FileSystemObject")
     Set objShell = CreateObject("WScript.Shell")
-    Set objStdOut = WScript.StdOut
 
 	If SomethingToDo(bks, FileName) Then
 		dtNow = Now()
@@ -368,14 +418,14 @@ Public Sub DoBackup(bks, FileName, JobName, Description, iJob, totalJobs)
 		If objFile.Size = 0 Then objFSO.DeleteFile(objFile.Path)
 		
 		CommandLine = "NTBACKUP backup """ & bks & """ /v:yes /r:no /rs:no /m normal /j """ & JobName & """ /l:f /f """ & FileName & """ /d """ & Description & """"
-		If Not IsNull(objStdOut) Then WScript.StdOut.WriteLine Now() & vbTab & CommandLine
+		LogMessage Now() & vbTab & CommandLine
 		ExitCode = objShell.Run("cmd /c " & CommandLine, 8, True)
 
 		SourceLog = GetLogFile(StartTimeStamp, JobName)
 		If SourceLog <> vbNullString Then
 			Set objFile = objFSO.GetFile(FileName)
 			TargetLog = objFile.ParentFolder & "\" & objFSO.GetBaseName(objFile) & ".log"
-			If Not IsNull(objStdOut) Then WScript.StdOut.WriteLine Now() & vbTab & "Copy """ & SourceLog & """ """ & TargetLog & """"
+			LogMessage Now() & vbTab & "Copy """ & SourceLog & """ """ & TargetLog & """"
 			objFSO.CopyFile SourceLog, TargetLog, OverwriteExisting
 
 			Success = True
@@ -388,36 +438,38 @@ Public Sub DoBackup(bks, FileName, JobName, Description, iJob, totalJobs)
 			If Success And ExitCode = 0 Then CleanUp(FileName)
 	    End If
     End If
-	If Not IsNull(objStdOut) Then WScript.StdOut.WriteLine Now() & vbTab & iJob & " of " & totalJobs & " Complete"
+	LogMessage Now() & vbTab & iJob & " of " & totalJobs & " Complete"
+
+	Set objFSO = Nothing
+	Set objFile = Nothing
+	Set objShell = Nothing
 End Sub
 'Script can be debugged by opening a CMD window and executing the following command (note that the two slashes are not a typo)...
 '	cscript Backup.vbs //X
 Dim vArg, aArgs(), iCount
 Dim SharedDocuments, BackupFolder, AltBackupFolder
-Dim objStdOut
 Dim iJob, totalJobs
 
 SharedDocuments = GetEnvironmentVariable("SharedDocuments")
 BackupFolder = GetEnvironmentVariable("BackupFolder")
 AltBackupFolder = GetEnvironmentVariable("AltBackupFolder")
 
-Set objStdOut = WScript.StdOut
-If Not IsNull(objStdOut) Then objStdOut.WriteLine "[Backup.vbs" & vbTab & Now() & "]"
+LogMessage "[Backup.vbs" & vbTab & Now() & "]"
 If WScript.Arguments.Count > 0 Then
     If WScript.Arguments.Count <> 4 Then
         If Not IsNull(objStdOut) Then 
-            objStdOut.WriteLine "Usage:"
-            objStdOut.WriteLine "Backup.vbs [<bks>, <FileName>, <JobName>, <Description>]"
-            objStdOut.WriteLine " (either none or all arguments accepted)"
-            objStdOut.WriteLine "  bks             Specifies the name of the backup selection file (.bks file) to be used for this backup operation. The @ character"
-            objStdOut.WriteLine "                  must precede the name of the backup selection file. A backup selection file contains information on the files and"
-            objStdOut.WriteLine "                  folders you have selected for backup. You have to create the file using the graphical user interface (GUI)"
-            objStdOut.WriteLine "                  version of Backup. If no bks file is to be used, this argument may be ""systemstate"" or the pathname of the folder"
-            objStdOut.WriteLine "                  being backed-up."
-            objStdOut.WriteLine "  FileName        Logical disk path and file name."
-            objStdOut.WriteLine "  JobName         Specifies the job name to be used in the log file. The job name usually describes the files and folders you are"
-            objStdOut.WriteLine "                  backing up in the current backup job as well as the date and time you backed up the files."
-            objStdOut.WriteLine "  Description     Specifies a label for backup set. "
+            LogMessage "Usage:"
+            LogMessage "Backup.vbs [<bks>, <FileName>, <JobName>, <Description>]"
+            LogMessage " (either none or all arguments accepted)"
+            LogMessage "  bks             Specifies the name of the backup selection file (.bks file) to be used for this backup operation. The @ character"
+            LogMessage "                  must precede the name of the backup selection file. A backup selection file contains information on the files and"
+            LogMessage "                  folders you have selected for backup. You have to create the file using the graphical user interface (GUI)"
+            LogMessage "                  version of Backup. If no bks file is to be used, this argument may be ""systemstate"" or the pathname of the folder"
+            LogMessage "                  being backed-up."
+            LogMessage "  FileName        Logical disk path and file name."
+            LogMessage "  JobName         Specifies the job name to be used in the log file. The job name usually describes the files and folders you are"
+            LogMessage "                  backing up in the current backup job as well as the date and time you backed up the files."
+            LogMessage "  Description     Specifies a label for backup set. "
         End If
         WScript.Quit
     End If
@@ -502,5 +554,5 @@ Else
     ''DoBackup "\\EUKB6\My Documents",                            BackupFolder & "\EUKB6 My Documents.bkf",                   "EUKB6 My Documents",                   "Full NT Backup of EUKB6 My Documents",           iJob, totalJobs:    iJob = iJob + 1
 End If
 
-If Not IsNull(objStdOut) Then objStdOut.Close
+If Not IsNull(WScript.StdOut) Then WScript.StdOut.Close
 WScript.Quit
