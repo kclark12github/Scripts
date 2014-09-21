@@ -1,3 +1,19 @@
+'Backup.vbs
+'	Visual Basic Script Used to Automate Backups (NTBACKUP) on a Weekly Basis...
+'   Copyright © 2006-2009, Ken Clark
+'*********************************************************************************************************************************
+'
+'   Modification History:
+'   Date:       Developer:		Description:
+'	06/18/09	Ken Clark		Added logic to avoid backups for inactive content;
+'								Added Modification History;
+'	05/21/09	Ken Clark		Split Downloads backup into multiple subdirectory-based backups;
+'	12/31/08	Ken Clark		Added time-stamps on output as well as progress info;
+'   12/23/08    Ken Clark		Added STDOUT output and command-line support;
+'   12/08/08    Ken Clark       Split "My Music" backup into separate pieces to reduce size of overall backup file;
+'   04/18/08    Ken Clark       Updated AltBackupFolder to be registry-based like BackupFolder;
+'   03/21/06    Ken Clark		Created;
+'=================================================================================================================================
 'Ntbackup
 'Perform backup operations at a command prompt or from a batch file using the ntbackup command followed by various parameters.
 '
@@ -162,6 +178,43 @@ Public Function GetLogFile(StartTimeStamp, MyJobName)
         End If
     Next
 End Function
+Public Function GetCreationDate(bksPath)
+	Dim strComputer, objWMIService, FSO, objFile
+	Dim ParentFolder, BaseName, Extension
+	Dim colFileList, varDate
+	Dim objStdOut
+	
+    Set objStdOut = WScript.StdOut
+	strComputer = "."
+	Set objWMIService = GetObject("winmgmts:\\" & strComputer & "\root\CIMV2")
+
+	GetCreationDate = Null
+	'strTarget won't be our real file name, but a template used to date-time stamp the true file name...
+    Set FSO = CreateObject("Scripting.FileSystemObject")
+	If Not FSO.FileExists(bksPath) Then
+	    Set objFile = FSO.CreateTextFile(bksPath)                   'Create a dummy file to ease FileName construction...
+	End If
+	Set objFile = FSO.GetFile(bksPath)
+	ParentFolder = objFile.ParentFolder
+	BaseName = FSO.GetBaseName(objFile)
+	Extension = FSO.GetExtensionName(objFile)
+	If objFile.Size = 0 Then FSO.DeleteFile(objFile.Path)
+
+	'Note that we're not currently handling DST...
+	
+	'objStdOut.WriteLine "Attempting to find CreationDate for " & bksPath & "..."
+    Set colFileList = objWMIService.ExecQuery("ASSOCIATORS OF {Win32_Directory.Name='" & ParentFolder & "'} Where ResultClass = CIM_DataFile")
+    For Each objFile In colFileList
+		If UCase(Left(objFile.FileName, Len(BaseName))) = UCase(BaseName) And UCase(objFile.Extension) = UCase(Extension) Then
+			'objStdOut.WriteLine Now() & vbTab & objFile.FileName & "." & objFile.Extension & " (" & TypeName(objFile) & ")"
+            Set varDate = CreateObject("WbemScripting.SWbemDateTime")
+            varDate.Value = objFile.CreationDate
+            'objStdOut.WriteLine Now() & vbTab & varDate.GetVarDate(True) & " (" & objFile.CreationDate & ") - " & objFile.Name
+            GetCreationDate = varDate.GetVarDate(True)
+            Exit Function
+        End If
+    Next
+End Function
 Public Sub CleanUp(FileName)
     Const DeleteReadOnly = TRUE
 	Const wbemFlagReturnImmediately = &h10
@@ -183,43 +236,157 @@ Public Sub CleanUp(FileName)
 		End If
     Next    
 End Sub
+Private Function CheckDateModified(objFile, excluded, creationDate, FolderCount, FileCount)
+	Dim objFSO, objStdOut, varDate, i
+	Dim Path, LastModified
+
+	Select Case TypeName(objFile)
+		Case "SWbemObjectEx"
+			Path = objFile.Name
+		Case "File", "Folder"
+			Path = objFile.Path
+		Case Else
+	End Select
+
+	If Not IsNull(excluded) Then
+		For i = 1 To UBound(excluded)
+			If Right(excluded(i), 1) <> "\" And UCase(Path) = UCase(excluded(i)) Then CheckDateModified = False : Exit Function
+		    If Right(excluded(i), 1) = "\" And UCase(Path) = Left(UCase(excluded(i)), Len(excluded(i))-1) Then CheckDateModified = False : Exit Function
+		Next
+	End If
+
+	Select Case TypeName(objFile)
+		Case "SWbemObjectEx"
+			Set varDate = CreateObject("WbemScripting.SWbemDateTime")
+			varDate.Value = objFile.LastModified
+			LastModified = varDate.GetVarDate(True)
+		Case "File", "Folder"
+			LastModified = objFile.DateLastModified
+		Case Else
+	End Select
+	CheckDateModified = CBool(LastModified > creationDate)
+	If Not CheckDateModified Then
+	Select Case TypeName(objFile)
+		Case "SWbemObjectEx"
+			FileCount = FileCount + 1
+		Case "File"
+			FileCount = FileCount + 1
+		Case "Folder"
+			FolderCount = FolderCount + 1
+		Case Else
+	End Select
+	End If
+End Function
+Private Function ScanSubFolders(Folder, excluded, creationDate, FolderCount, FileCount)
+	Dim objWMIService, colFileList, objFile, varDate
+	Dim strComputer
+
+	If CheckDateModified(Folder, excluded, creationDate, FolderCount, FileCount) Then ScanSubFolders = True : Exit Function
+	
+	strComputer = "."
+	Set objWMIService = GetObject("winmgmts:\\" & strComputer & "\root\CIMV2")
+    Set colFileList = objWMIService.ExecQuery("ASSOCIATORS OF {Win32_Directory.Name='" & Folder & "'} Where ResultClass = CIM_DataFile")
+    For Each objFile In colFileList
+		If CheckDateModified(objFile, excluded, creationDate, FolderCount, FileCount) Then ScanSubFolders = True : Exit Function
+    Next
+    For Each Subfolder in Folder.SubFolders
+        If ScanSubFolders(Subfolder, excluded, creationDate, FolderCount, FileCount) Then Exit For
+    Next
+    ScanSubFolders = False
+End Function
+Private Function SomethingToDo(bks, FileName)
+	Const ForReading = 1
+	Const UnicodeFormat = -1
+	Dim objFSO, objStdOut, creationDate, FolderCount, FileCount, strLine, included(), excluded()
+    Set objFSO = CreateObject("Scripting.FileSystemObject")
+	Set dtmTargetDate = CreateObject("WbemScripting.SWbemDateTime")
+    Set objStdOut = WScript.StdOut
+
+	SomethingToDo = True
+
+	creationDate = GetCreationDate(FileName)
+	If Not IsNull(creationDate) Then
+		'objStdOut.WriteLine "Creation Date: " & creationDate
+		FolderCount = 0
+		FileCount = 0
+		If Left(bks, 1) = "@" Then
+			Set objFile = objFSO.OpenTextFile(Mid(bks, 2), ForReading, False, UnicodeFormat)
+			iIncluded = 0
+			iExcluded = 0
+			Do While Not objFile.AtEndOfStream
+			    strLine = objFile.ReadLine
+			    If InStr(UCase(strLine), "/EXCLUDE") > 0 Then
+					iExcluded = iExcluded + 1
+					ReDim Preserve excluded(iExcluded) 
+					excluded(iExcluded) = Trim(Mid(strLine, 1, Len(strLine)-Len("/Exclude")))
+				Else
+					iIncluded = iIncluded + 1
+					ReDim Preserve included(iIncluded)
+					included(iIncluded) = Trim(strLine)
+				End If		    
+			Loop
+			objFile.Close				
+
+			For iIncluded = 1 To UBound(included)
+				If UCase(included(iIncluded)) = "SYSTEMSTATE" Then SomethingToDo = True : Exit Function
+				
+				If Right(included(iIncluded), 1) = "\" Then
+					'We have a folder reference...
+					SomethingToDo = ScanSubfolders(objFSO.GetFolder(included(iIncluded)), excluded, creationDate, FolderCount, FileCount)
+				Else
+					'We have a file reference...
+					SomethingToDo = CheckDateModified(objFSO.GetFile(included(iIncluded)), excluded, creationDate, FolderCount, FileCount)
+				End If
+				'If we found something needing to be backed-up, no point in continuing, simply return...
+				If SomethingToDo Then Exit Function
+			Next
+		Else
+			SomethingToDo = ScanSubfolders(objFSO.GetFolder(bks), Null, creationDate, FolderCount, FileCount)
+		End If
+		If Not SomethingToDo Then 
+			If Not IsNull(objStdOut) Then WScript.StdOut.WriteLine Now() & vbTab & vbTab & "Checked " & FormatNumber(FileCount,0,,,vbTrue) & " Files (in " & FormatNumber(FolderCount,0,,,vbTrue) & " Folders) - Found nothing new to backup..."
+		End If
+	End If
+End Function
 Public Sub DoBackup(bks, FileName, JobName, Description, iJob, totalJobs)
 	Const ForReading = 1
-	COnst UnicodeFormat = -1
+	Const UnicodeFormat = -1
     Const OverwriteExisting = TRUE
 
     Set objFSO = CreateObject("Scripting.FileSystemObject")
     Set objShell = CreateObject("WScript.Shell")
     Set objStdOut = WScript.StdOut
 
-    dtNow = Now()
-    StartTimeStamp = DateDiff("s", BaseCTime(), dtNow)      
-    If Not objFSO.FileExists(FileName) Then
-        Set objFile = objFSO.CreateTextFile(FileName)                   'Create a dummy file to ease FileName construction...
-    End If
-    Set objFile = objFSO.GetFile(FileName)
-    FileName = objFile.ParentFolder & "\" & objFSO.GetBaseName(objFile) & "."  & FormatTimeStamp(dtNow) & "." & objFSO.GetExtensionName(objFile)
-    If objFile.Size = 0 Then objFSO.DeleteFile(objFile.Path)
-    
-    CommandLine = "NTBACKUP backup """ & bks & """ /v:yes /r:no /rs:no /m normal /j """ & JobName & """ /l:f /f """ & FileName & """ /d """ & Description & """"
-    If Not IsNull(objStdOut) Then WScript.StdOut.WriteLine Now() & vbTab & CommandLine
-    ExitCode = objShell.Run("cmd /c " & CommandLine, 8, True)
-
-    SourceLog = GetLogFile(StartTimeStamp, JobName)
-    If SourceLog <> vbNullString Then
+	If SomethingToDo(bks, FileName) Then
+		dtNow = Now()
+		StartTimeStamp = DateDiff("s", BaseCTime(), dtNow)      
+		If Not objFSO.FileExists(FileName) Then
+		    Set objFile = objFSO.CreateTextFile(FileName)                   'Create a dummy file to ease FileName construction...
+		End If
 		Set objFile = objFSO.GetFile(FileName)
-		TargetLog = objFile.ParentFolder & "\" & objFSO.GetBaseName(objFile) & ".log"
-		If Not IsNull(objStdOut) Then WScript.StdOut.WriteLine Now() & vbTab & "Copy """ & SourceLog & """ """ & TargetLog & """"
-		objFSO.CopyFile SourceLog, TargetLog, OverwriteExisting
+		FileName = objFile.ParentFolder & "\" & objFSO.GetBaseName(objFile) & "."  & FormatTimeStamp(dtNow) & "." & objFSO.GetExtensionName(objFile)
+		If objFile.Size = 0 Then objFSO.DeleteFile(objFile.Path)
+		
+		CommandLine = "NTBACKUP backup """ & bks & """ /v:yes /r:no /rs:no /m normal /j """ & JobName & """ /l:f /f """ & FileName & """ /d """ & Description & """"
+		If Not IsNull(objStdOut) Then WScript.StdOut.WriteLine Now() & vbTab & CommandLine
+		ExitCode = objShell.Run("cmd /c " & CommandLine, 8, True)
 
-		Success = True
-		Set objFile = objFSO.OpenTextFile(TargetLog, ForReading, False, UnicodeFormat)
-		Do While Not objFile.AtEndOfStream
-		    strLine = objFile.ReadLine
-		    If strLine = "The operation did not successfully complete." Then Success = False : Exit Do
-		Loop
-		objFile.Close				
-		If Success And ExitCode = 0 Then CleanUp(FileName)
+		SourceLog = GetLogFile(StartTimeStamp, JobName)
+		If SourceLog <> vbNullString Then
+			Set objFile = objFSO.GetFile(FileName)
+			TargetLog = objFile.ParentFolder & "\" & objFSO.GetBaseName(objFile) & ".log"
+			If Not IsNull(objStdOut) Then WScript.StdOut.WriteLine Now() & vbTab & "Copy """ & SourceLog & """ """ & TargetLog & """"
+			objFSO.CopyFile SourceLog, TargetLog, OverwriteExisting
+
+			Success = True
+			Set objFile = objFSO.OpenTextFile(TargetLog, ForReading, False, UnicodeFormat)
+			Do While Not objFile.AtEndOfStream
+			    strLine = objFile.ReadLine
+			    If strLine = "The operation did not successfully complete." Then Success = False : Exit Do
+			Loop
+			objFile.Close				
+			If Success And ExitCode = 0 Then CleanUp(FileName)
+	    End If
     End If
 	If Not IsNull(objStdOut) Then WScript.StdOut.WriteLine Now() & vbTab & iJob & " of " & totalJobs & " Complete"
 End Sub
@@ -268,9 +435,9 @@ Else
         Case "Monday"
             totalJobs = 18
         Case "Tuesday"
-            totalJobs = 8
+            totalJobs = 16
         Case "Wednesday"
-            totalJobs = 4
+            totalJobs = 6
         Case "Thursday"
             totalJobs = 2
         Case "Friday"
