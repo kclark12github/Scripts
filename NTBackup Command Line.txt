@@ -1,0 +1,1 @@
+C:\WINDOWS\system32\ntbackup.exe backup "@C:\Documents and Settings\kclark\Local Settings\Application Data\Microsoft\Windows NT\NTBackup\data\FiRRe v4.bks" /a /d "Set created 8/26/2005 at 5:50 PM" /v:no /r:no /rs:no /hc:off /m normal /j "FiRRe v4" /l:s /f "F:\Projects\FiRRe\FiRRe v4.0 20060405.bkf"
