@@ -5,8 +5,9 @@
 '
 '   Modification History:
 '   Date:       Developer:		Description:
-'   09/26/15    Ken Clark       Enabled/tested running as a Scheduled Task;
-'   09/21/14	Ken Clark		Created;
+'   06/20/16    Ken Clark     Additional Scheduled Task refinements;
+'   09/26/15    Ken Clark     Enabled/tested running as a Scheduled Task;
+'   09/21/14	  Ken Clark		  Created;
 '=================================================================================================================================
 'Script can be debugged by opening a CMD window and executing the following command (note that the two slashes are not a typo)...
 '	cscript//X SI.vbs
@@ -64,8 +65,22 @@ On Error Resume Next
 Const HKEY_CURRENT_USER = &H80000001
 Const HKEY_LOCAL_MACHINE = &H80000002
 Const ForReading = 1
+Dim vArg, aArgs(), iCount, BackupServer
+BackupServer = "ALPHA"
 
-Dim LogFile : LogFile = Replace(WScript.ScriptFullName, ".vbs", ".log")
+Set objWMIService = GetObject("winmgmts:\\.\root\CIMV2")
+Set colItems = objWMIService.ExecQuery("SELECT * FROM Win32_ComputerSystem")
+For Each objItem In colItems
+    strComputer = objItem.Path_.Server: Exit For
+Next
+
+If WScript.Arguments.Count > 0 Then
+	If WScript.Arguments.Count = 1 Then
+		BackupServer = UCase(WScript.Arguments(0))
+  End If
+End If
+
+Dim LogFile : LogFile = "\\" & BackupServer & "\Backups\" & strComputer & "\SI." & strComputer & "." & FormatTimeStamp(Now()) & ".log"
 LogMessage LogFile, "[SI.vbs" & vbTab & Now() & "]"
 
 Set Regions=CreateObject("Scripting.Dictionary")
@@ -82,12 +97,6 @@ If objExcel Is Nothing Then
     LogMessage LogFile, "Unable to invoke Excel, continuing with tab-delimited data..."
 
     LogMessage LogFile, "Examining Computer System..."
-    Set objWMIService = GetObject("winmgmts:\\.\root\CIMV2")
-    Set colItems = objWMIService.ExecQuery("SELECT * FROM Win32_ComputerSystem")
-    For Each objItem In colItems
-        strComputer = objItem.Path_.Server: Exit For
-    Next
-
     x = 2
     Set oReg=GetObject("winmgmts:{impersonationLevel=impersonate}!\\" & strComputer & "\root\default:StdRegProv")
     strKeyPath = "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
@@ -202,13 +211,9 @@ Else
     iSource=8:  objExcel.Cells(1, iSource).Value = "Source":	        objExcel.Columns(iSource).ColumnWidth = 40 
 
     LogMessage LogFile, "Examining Computer System..."
-    Set objWMIService = GetObject("winmgmts:\\.\root\CIMV2")
-    Set colItems = objWMIService.ExecQuery("SELECT * FROM Win32_ComputerSystem")
-    For Each objItem In colItems
-        strComputer = objItem.Path_.Server: Exit For
-    Next
     objExcel.ActiveSheet.Name = strComputer
-    xlsFile = Replace(WScript.ScriptFullName, ".vbs", "." & strComputer & "." & FormatTimeStamp(Now()) & ".xlsx")
+    'xlsFile = Replace(WScript.ScriptFullName, ".vbs", "." & strComputer & "." & FormatTimeStamp(Now()) & ".xlsx")
+    xlsFile = "\\" & BackupServer & "\Backups\" & strComputer & "\SI." & strComputer & "." & FormatTimeStamp(Now()) & ".xlsx"
     Set fso = CreateObject("Scripting.FileSystemObject")
     if fso.FileExists(xlsFile) then fso.DeleteFile(xlsFile)
 
