@@ -1,4 +1,9 @@
-﻿function Format-Elapsed {
+﻿[cmdletbinding()]
+Param([string]$Root,
+    [string]$BackupFolder,
+    [string]$LogPath)
+
+function Format-Elapsed {
     Param($Start, $End)
     $Elapsed = ""
     $ts = New-TimeSpan -start $Start -end $End
@@ -215,22 +220,26 @@ function Write-Separator {
     Write-Message -Message $Separator -Path $Path
 }
 .{
-    param([string]$Root,[string]$BackupFolder,[string]$LogPath)
-
-    if (!($PSBoundParameters.ContainsKey('Root'))) {$Root = "E:\Games\GOG Galaxy\Games"}
-    if (!(Test-Path -Path $Root)) {
+    #Param([string]$Root,[string]$BackupFolder,[string]$LogPath)
+ 
+    if ($Root.Equals("")) {$Root = "E:\Games\GOG Galaxy\Games"}   #if (!($PSBoundParameters.ContainsKey('Root'))) {$Root = "E:\Games\GOG Galaxy\Games"}
+    if (![System.IO.Directory]::Exists($Root)) { #if ((Test-Path -Path $Root)) {
         $Message = "Error: Specified -Root folder (""$Root"") not found!"
-        Write-Output $Message -ForegroundColor Red
+        Write-Host $Message -ForegroundColor Red
         exit
     }
-    if (!($PSBoundParameters.ContainsKey('BackupFolder'))) {$BackupFolder = "\\Alpha\Public\Software\Games\PC\"}
-    if (!(Test-Path -Path $BackupFolder)) {
+
+    if ($BackupFolder.Equals("")) {$BackupFolder = "\\Alpha\Public\Software\Games\PC"}   #if (!($PSBoundParameters.ContainsKey('BackupFolder'))) {$BackupFolder = "\\Alpha\Public\Software\Games\PC\"}
+    #if ((Test-Path -Path $BackupFolder)) {
+    if (![System.IO.Directory]::Exists($BackupFolder)) {
         $Message ="Error: Specified -BackupFolder folder (""$BackupFolder"") not found!"
-        Write-Output $Message -ForegroundColor Red
+        Write-Host $Message -ForegroundColor Red
         exit
     }
     if (!$BackupFolder.EndsWith("\")) {$BackupFolder = $BackupFolder + "\"}
-    if (!($PSBoundParameters.ContainsKey('LogPath'))) {$LogPath = "$($BackupFolder)HarvestGOGGoodies.log"}
+
+    #if (!($PSBoundParameters.ContainsKey('LogPath'))) {$LogPath = "$($BackupFolder)HarvestGOGGoodies.log"}
+    if ($LogPath.Equals("")) {$LogPath = "$($BackupFolder)HarvestGOGGoodies.log"}
     
     $AppName = "HarvestGOGGoodies"
     $StartTime = Get-Date
