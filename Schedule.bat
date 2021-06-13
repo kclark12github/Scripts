@@ -1,0 +1,1 @@
+AT 02:00 /every:SU,M,T,W,Th,F,S "cscript H:\Development\Backups\VSS\VSSArchive.vbs"
