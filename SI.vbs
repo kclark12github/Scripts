@@ -1,13 +1,14 @@
 'SI.vbs
 '	Visual Basic Script Used to Replicate Control Panel's Programs and Features Display (Output in Excel)...
-'   Copyright © 2015, Ken Clark
+'   Copyright © 2015-2022, Ken Clark
 '*********************************************************************************************************************************
 '
 '   Modification History:
-'   Date:       Developer:		Description:
-'   06/20/16    Ken Clark     Additional Scheduled Task refinements;
-'   09/26/15    Ken Clark     Enabled/tested running as a Scheduled Task;
-'   09/21/14	  Ken Clark		  Created;
+'   Date:		Developer:	Description:
+'	03/23/22	Ken Clark	Changed default BackupServer to GOLF;
+'   06/20/16	Ken Clark	Additional Scheduled Task refinements;
+'   09/26/15	Ken Clark	Enabled/tested running as a Scheduled Task;
+'   09/21/14	Ken Clark	Created;
 '=================================================================================================================================
 'Script can be debugged by opening a CMD window and executing the following command (note that the two slashes are not a typo)...
 '	cscript//X SI.vbs
@@ -66,7 +67,7 @@ Const HKEY_CURRENT_USER = &H80000001
 Const HKEY_LOCAL_MACHINE = &H80000002
 Const ForReading = 1
 Dim vArg, aArgs(), iCount, BackupServer
-BackupServer = "ALPHA"
+BackupServer = "GOLF"
 
 Set objWMIService = GetObject("winmgmts:\\.\root\CIMV2")
 Set colItems = objWMIService.ExecQuery("SELECT * FROM Win32_ComputerSystem")

@@ -1,10 +1,11 @@
 ﻿#CloudBackup.ps1
 #	PowerShell Script Used to Synchronize Two WD myCloud Mirror Folders (Suitable for Scheduling)...
-#   Copyright © 2006-2015, Ken Clark
+#   Copyright © 2006-2022, Ken Clark
 #*********************************************************************************************************************************
 #
 #   Modification History:
 #   Date:       Developer:		Description:
+#   03/23/22    Ken Clark       Replaced hard-coded \\Alpha\Backups with $Env:BackupRoot for greater flexibility;
 #   09/30/15    Ken Clark		Created;
 #=================================================================================================================================
 [CmdletBinding()]
@@ -38,12 +39,12 @@ function logMessage([string]$message){
 }
 function sendMail{
      #Creating SMTP server object
-     $smtpClient = new-object Net.Mail.SmtpClient("smtp.comcast.net",587)   #465
-     $smtpClient.Credentials = new-object System.Net.NetworkCredential("kfc12", "cvn65BigE")
+     $smtpClient = new-object Net.Mail.SmtpClient($env:SMTP_ADDRESS,$env:SMTP_PORT)
+     $smtpClient.Credentials = new-object System.Net.NetworkCredential($env:SMTP_USER, $env:SMTP_PW)
      $smtpClient.EnableSsl = $true
      #Email structure 
-     $msg = new-object Net.Mail.MailMessage("kfc12@comcast.net","kfc12@comcast.net")
-     $msg.sender = "kfc12@comcast.net"
+     $msg = new-object Net.Mail.MailMessage($env:MY_EMAIL,$env:MY_EMAIL)
+     $msg.sender = $env:MY_EMAIL
      $msg.subject = $subject
      $msg.body = $body
 
@@ -139,13 +140,13 @@ finally
 # -SmtpServer "smtp-mail.outlook.com" -UseSsl -Credential "ScriptingGUys@Outlook.com"
 # Remove-Item $destination
 ##--------------------------------------------------------------------------------  
-#$newFolders = dir \\ALPHA\Backups | ? {$_.PSIsContainer} | ? {$_.LastWriteTime -gt (Get-Date).AddDays(-7)} 
+#$newFolders = dir $($env:BackupRoot) | ? {$_.PSIsContainer} | ? {$_.LastWriteTime -gt (Get-Date).AddDays(-7)} 
 #$newFolders | % { copy $_.FullName  c:\temp\archive -Recurse -Force}
 ##--------------------------------------------------------------------------------  
 #$sevenDaysAgo = (Get-Date).AddDays(-7);
-#$newFolders = dir \\ALPHA\Backups | ? {$_.PSIsContainer}
+#$newFolders = dir $($env:BackupRoot) | ? {$_.PSIsContainer}
 ## Get the directories in X:\EmpInfo.
-#$directories = Get-ChildItem \\ALPHA\Backups | Where-Object { $_.PSIsContainer };
+#$directories = Get-ChildItem $($env:BackupRoot) | Where-Object { $_.PSIsContainer };
 ## Loop through the directories.
 #foreach($directory in $directories)
 #{

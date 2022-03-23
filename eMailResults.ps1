@@ -12,23 +12,25 @@
 
 #Enable -Verbose option
 [CmdletBinding()]
-param([string]$Subject, [string]$Body, [string]$LogFile)
+param([string]$Subject, [string]$Body, [string]$LogFile, [switch]$AsHTML=$False)
 
-$User = "kfc12"
-$PWord = ConvertTo-SecureString -String "cvn80BigE!" -AsPlainText -Force
+$User = $env:SMTP_USER
+$PWord = ConvertTo-SecureString $env:SMTP_PW -AsPlainText -Force
 $Credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $User, $PWord
 
 $LogContent = Get-Content -Path $LogFile -Raw
 $Body = $Body + $LogContent
 
 $email = @{
-    From = "kfc12@comcast.net"
-    To = "kfc12@comcast.net"
+    From = "$env:USERNAME <$env:My_EMAIL>"
+    To = "$env:USERNAME <$env:My_EMAIL>"
     Subject = $Subject
-    SMTPServer = "smtp.comcast.net"
-    Port = 587
+    SMTPServer = $env:SMTP_ADDRESS
+    Port = $env:SMTP_PORT
     Body = $Body
+    BodyAsHtml = $AsHTML
     Attachments = $LogFile
     Credential = $Credential
 }
-send-mailmessage @email -UseSsl
+Send-MailMessage @email -UseSsl
+

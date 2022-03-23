@@ -14,11 +14,11 @@
 
 #Enable -Verbose option
 [CmdletBinding()]
-param([string]$Title, [string]$Source, [string]$Target, [string]$LogFile)
+param([string]$Title, [string]$Source, [string]$Target, [string]$Files="*.*", [string]$LogFile)
 
 $Success = $True
 
-$Body = "RoboCopy ""$Source"" ""$Target"" /mir /np /log:""$LogFile""`n`n"
+$Body = "RoboCopy ""$Source"" ""$Target"" ""$Files"" /mir /np /log:""$LogFile""`n`n"
 RoboCopy $Source $Target /mir /np /log:$LogFile
 switch($LASTEXITCODE) {
     0 { 
