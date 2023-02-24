@@ -123,15 +123,15 @@ function Write-Files {
     $EmailBody = $Message.Replace("©", "&copy;") + "<br />"
     $Message = "Root: $Root; "
     Write-Message -Message $Message -Path $LogPath
-    $EmailBody += "$Message<br /><br />"
+    $EmailBody += "$Message<br />"
     $Message = "BackupFolder: $BackupFolder; "
     Write-Message -Message $Message -Path $LogPath
-    $EmailBody += "$Message<br /><br />"
+    $EmailBody += "$Message<br />"
     $Message = "LogPath: $LogPath; "
     Write-Message -Message $Message -Path $LogPath
-    $EmailBody += "$Message<br /><br />"
+    $EmailBody += "$Message<br />"
     $now = Get-Date -Format "yyyyMMdd.HHmmss"
-    $xlsFile = "$BackupFolder\$Root\SI.$Root.$now.xlsx"
+    $xlsFile = "$($BackupFolder)$Root\SI.$Root.$now.xlsx"
     $Message = "xlsFile: $xlsFile;"
     Write-Message -Message $Message -Path $LogPath
     $EmailBody += "$Message<br /><br />"
@@ -139,9 +139,9 @@ function Write-Files {
     #==============================================================================================================================
     $Message = "Creating new Excel file..."
     Write-Message -Message $Message -Path $LogPath
-    $EmailBody += "$Message<br /><br />"
+    $EmailBody += "$Message<br />"
     $excel = New-Object -ComObject excel.application 
-    $excel.visible = $true #TODO: Remove
+    $excel.visible = $false
     $workbook = $excel.Workbooks.Add()
     #$workbook.Worksheets.Item(3).Delete()
     #$Range = $excel.Worksheets	#Range("A1","G5")
@@ -151,7 +151,7 @@ function Write-Files {
     $RegKey = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*"
     $Message = "Gathering installation information from registry ($RegKey)..."
     Write-Message -Message $Message -Path $LogPath
-    $EmailBody += "$Message<br /><br />"
+    $EmailBody += "$Message<br />"
 
     $Objs = @()
     $InstalledAppsInfos = Get-ItemProperty -Path $RegKey
@@ -170,6 +170,9 @@ function Write-Files {
         $Objs += $Obj
     }
     #Save $objs to Excel Uninstall tab...
+    $Message = "Writing data to Excel(Uninstall)..."
+    Write-Message -Message $Message -Path $LogPath
+    $EmailBody += "$Message<br />"
     $ws = $workbook.Worksheets.Item(1) 
     $ws.Name = 'Uninstall'
     #Format cells
@@ -207,7 +210,7 @@ function Write-Files {
     $RegKey = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
     $Message = "Gathering installation information from registry ($RegKey)..."
     Write-Message -Message $Message -Path $LogPath
-    $EmailBody += "$Message<br /><br />"
+    $EmailBody += "$Message<br />"
 
     $Objs = @()
     $InstalledAppsInfos = Get-ItemProperty -Path $RegKey
@@ -226,6 +229,9 @@ function Write-Files {
         $Objs += $Obj
     }
     #Save $objs to Excel Wow6432Node tab...
+    $Message = "Writing data to Excel(Wow6432Node)..."
+    Write-Message -Message $Message -Path $LogPath
+    $EmailBody += "$Message<br />"
     $ws = $workbook.Worksheets.add()
     $ws.Name = 'Wow6432Node'
     $ws.Activate()
@@ -263,9 +269,12 @@ function Write-Files {
     #==============================================================================================================================
     $Message = "Gathering installation information using winget list..."
     Write-Message -Message $Message -Path $LogPath
-    $EmailBody += "$Message<br /><br />"
+    $EmailBody += "$Message<br />"
 
     #Save winget output to Excel winget tab...
+    $Message = "Writing data to Excel(winget)..."
+    Write-Message -Message $Message -Path $LogPath
+    $EmailBody += "$Message<br /><br />"
     $ws = $workbook.Worksheets.add()
     $ws.Name = 'winget'
     $ws.Activate()
