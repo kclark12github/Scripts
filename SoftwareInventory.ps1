@@ -141,7 +141,7 @@ function Write-Files {
     Write-Message -Message $Message -Path $LogPath
     $EmailBody += "$Message<br />"
     $excel = New-Object -ComObject excel.application 
-    $excel.visible = $false
+    $excel.visible = $true
     $workbook = $excel.Workbooks.Add()
     #$workbook.Worksheets.Item(3).Delete()
     #$Range = $excel.Worksheets	#Range("A1","G5")
@@ -175,6 +175,7 @@ function Write-Files {
     $EmailBody += "$Message<br />"
     $ws = $workbook.Worksheets.Item(1) 
     $ws.Name = 'Uninstall'
+    $ws.Tab.ColorIndex = 14   #Teal
     #Format cells
     $excel.Range("A1:H1").Font.bold = $true
     $excel.Range("A1:H1").Interior.ColorIndex = 14   #Teal
@@ -234,6 +235,7 @@ function Write-Files {
     $EmailBody += "$Message<br />"
     $ws = $workbook.Worksheets.add()
     $ws.Name = 'Wow6432Node'
+    $ws.Tab.ColorIndex = 10    #Dark Green
     $ws.Activate()
     #Format cells
     $excel.Range("A1:H1").Font.bold = $true
@@ -277,6 +279,7 @@ function Write-Files {
     $EmailBody += "$Message<br /><br />"
     $ws = $workbook.Worksheets.add()
     $ws.Name = 'winget'
+    $ws.Tab.ColorIndex = 11    #Dark Blue
     $ws.Activate()
     #Format cells
     $excel.Range("A1:E1").Font.bold = $true
