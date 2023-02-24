@@ -18,8 +18,8 @@ $User = $env:SMTP_USER
 $PWord = ConvertTo-SecureString $env:SMTP_PW -AsPlainText -Force
 $Credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $User, $PWord
 
-$LogContent = Get-Content -Path $LogFile -Raw
-$Body = $Body + $LogContent
+#$LogContent = Get-Content -Path $LogFile -Raw
+#$Body = $Body + "<br />" + $LogContent.Replace("`n", "<br />").Replace("©", "&copy;")
 
 $email = @{
     From = "$env:USERNAME <$env:My_EMAIL>"
