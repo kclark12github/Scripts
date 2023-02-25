@@ -230,7 +230,7 @@ function Write-Files {
     $StartTime = Get-Date
     $Message = "[$AppName © $("{0:yyyy}" -f $StartTime), Ken Clark                       $("{0:MM/dd/yy} {0:hh:mm:ss tt}" -f $StartTime)]"
 
-    if ($BackupFolder.Equals("")) {$BackupFolder = "$($Env:OneDrive)\Backups\"}  #$($Env:BackupRoot)\
+    if ($BackupFolder.Equals("")) {$BackupFolder = "$($Env:OneDrive)\Backups\$Root\"}  #$($Env:BackupRoot)\
     if ($LogPath.Equals("")) {$LogPath = "$($BackupFolder)$Root.FileList.log"}
     Write-Message -Message $Message -Path $LogPath
     $EmailBody = $Message.Replace("©", "&copy;") + "<br />"

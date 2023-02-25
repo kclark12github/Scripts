@@ -47,7 +47,7 @@ function Write-Vars {
     $StartTime = Get-Date
     $Message = "[$AppName © $("{0:yyyy}" -f $StartTime), Ken Clark                       $("{0:MM/dd/yy} {0:hh:mm:ss tt}" -f $StartTime)]"
 
-    if ($BackupFolder.Equals("")) {$BackupFolder = "$($Env:OneDrive)\Backups\"}  #BackupRoot)\
+    if ($BackupFolder.Equals("")) {$BackupFolder = "$($Env:OneDrive)\Backups\$Root\"}  #$($Env:BackupRoot)\
     if ($LogPath.Equals("")) {$LogPath = "$($BackupFolder)$Root.EnvList.log"}
     Write-Message -Message $Message -Path $LogPath
     $EmailBody = $Message.Replace("©", "&copy;") + "<br />"
