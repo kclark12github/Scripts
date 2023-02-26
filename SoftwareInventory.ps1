@@ -106,7 +106,7 @@ function Write-To-Excel {
     $errMessage = ""
     if ($Tab -eq "winget") {
         $wteMessage = "Gathering installation information using winget list..."
-        $Range = "A1:E1"
+        $Range = "A1:I1"
     } else {
         $wteMessage = "Gathering installation information from registry ($RegKey)..."
         $Range = "A1:H1"
@@ -153,13 +153,19 @@ function Write-To-Excel {
     $excel.ActiveWindow.SplitColumn = 1
     $excel.ActiveWindow.SplitRow = 1
     $excel.ActiveWindow.FreezePanes = $true
-    $iName=1;    $ws.Cells(1, $iName).Value = "Application Name";	$ws.Columns($iName).ColumnWidth = 40 
-    $iVer=2;     $ws.Cells(1, $iVer).Value = "Version";				$ws.Columns($iVer).ColumnWidth = 15
     if ($Tab -eq "winget") {
+        $iName=1;    $ws.Cells(1, $iName).Value = "Application Name";	$ws.Columns($iName).ColumnWidth = 40 
+        $iVer=2;     $ws.Cells(1, $iVer).Value = "Version";				$ws.Columns($iVer).ColumnWidth = 15
         $iAvail=3;   $ws.Cells(1, $iAvail).Value = "Available";			$ws.Columns($iAvail).ColumnWidth = 15
-        $iID=4;      $ws.Cells(1, $iID).Value = "ID";	                $ws.Columns($iID).ColumnWidth = 40 
-        $iSource=5;  $ws.Cells(1, $iSource).Value = "Source";	        $ws.Columns($iSource).ColumnWidth = 40 
+        $iSource=4;  $ws.Cells(1, $iSource).Value = "Source";	        $ws.Columns($iSource).ColumnWidth = 40 
+        $iPub=5;     $ws.Cells(1, $iPub).Value = "Publisher";			$ws.Columns($iPub).ColumnWidth = 15 
+        $iDate=6;    $ws.Cells(1, $iDate).Value = "Install Date";		$ws.Columns($iDate).ColumnWidth = 15 
+        $iSize=7;    $ws.Cells(1, $iSize).Value = "Estimated Size";		$ws.Columns($iSize).ColumnWidth = 15 
+        $iLoc=8;     $ws.Cells(1, $iLoc).Value = "Install Location";	$ws.Columns($iLoc).ColumnWidth = 40 
+        $iID=9;      $ws.Cells(1, $iID).Value = "ID";	                $ws.Columns($iID).ColumnWidth = 40 
     } else {
+        $iName=1;    $ws.Cells(1, $iName).Value = "Application Name";	$ws.Columns($iName).ColumnWidth = 40 
+        $iVer=2;     $ws.Cells(1, $iVer).Value = "Version";				$ws.Columns($iVer).ColumnWidth = 15
         $iPub=3;     $ws.Cells(1, $iPub).Value = "Publisher";			$ws.Columns($iPub).ColumnWidth = 15 
         $iDate=4;    $ws.Cells(1, $iDate).Value = "Install Date";		$ws.Columns($iDate).ColumnWidth = 15 
         $iSize=5;    $ws.Cells(1, $iSize).Value = "Estimated Size";		$ws.Columns($iSize).ColumnWidth = 15 
@@ -176,25 +182,52 @@ function Write-To-Excel {
                                   ConvertFrom-FixedColumnTable |  # parse output into objects
                                   Sort-Object Name |              # sort by the Name property (column)
             ForEach-Object {
+                $Name = $_.Name
+                $Version = $_.Version
+                $Available = $_.Available
                 $Source = $_.Source
+                $Publisher = "Unavailable"
+                $InstallDate = "Unavailable"
+                $EstimatedSize = "Unavailable"
+                $InstallLocation = "Unavailable"
+                $ID = $_.ID
                 if ($Source -eq "winget") {
                     #Parse winget show --id $_.ID to get Pulisher and other desired data
+                    $show = (winget show --id $ID) -split "`n"
+                    foreach($item in $show) {
+                        if ($item.StartsWith("Found ")) {
+                            $Name = $item.Substring("Found ".Length).Replace("[$ID]","")
+                        } elseif ($item.StartsWith("Publisher: ")) {
+                            $Publisher = $item.Substring("Publisher: ".Length)
+                        }
+                    }
                 }
                 else {
                     $ErrorActionPreference = "Stop"
                     Try {
                         #First look in the 32-bit Uninstall Registry Key...
-                        $RegKey = $RegKey32.Replace("*", $_.ID)
+                        $RegKey = $RegKey32.Replace("*", $ID)
                         $reg = Get-ItemProperty -Path $RegKey
                         $Source = "Uninstall"
+                        $Name = $reg.DisplayName
+                        $Publisher = $reg.Publisher
+                        $InstallDate = $reg.InstallDate
+                        $EstimatedSize = $reg.EstimatedSize
+                        $InstallLocation = $reg.InstallLocation
                     } Catch [System.Management.Automation.ItemNotFoundException]{
                         Try {
                             #Next look in the 64-bit Uninstall Registry Key...
-                            $RegKey = $RegKey64.Replace("*", $_.ID)
+                            $RegKey = $RegKey64.Replace("*", $ID)
                             $reg = Get-ItemProperty -Path $RegKey
                             $Source = "Wow5432Node"
+                            $Name = $reg.DisplayName
+                            $Publisher = $reg.Publisher
+                            $InstallDate = $reg.InstallDate
+                            $EstimatedSize = $reg.EstimatedSize
+                            $InstallLocation = $reg.InstallLocation
                         } Catch [System.Management.Automation.ItemNotFoundException]{
                             #Where Next?
+                            $Source = "Unavailable"
                         }
                     } Finally { 
                         $ErrorActionPreference = "Continue"
@@ -203,11 +236,15 @@ function Write-To-Excel {
                     }
                 }
 
-                $ws.Cells.Item($Row, $iName) = $_.Name
-                $ws.Cells.Item($Row, $iVer) = $_.Version
-                $ws.Cells.Item($Row, $iAvail) = $_.Available
-                $ws.Cells.Item($Row, $iID) = $_.ID
+                $ws.Cells.Item($Row, $iName) = $Name
+                $ws.Cells.Item($Row, $iVer) = $Version
+                $ws.Cells.Item($Row, $iAvail) = $Available
                 $ws.Cells.Item($Row, $iSource) = $Source
+                $ws.Cells.Item($Row, $iPub) = $Publisher
+                $ws.Cells.Item($Row, $iDate) = $InstallDate
+                $ws.Cells.Item($Row, $iSize) = $EstimatedSize
+                $ws.Cells.Item($Row, $iLoc) = $InstallLocation
+                $ws.Cells.Item($Row, $iID) = $ID
                 $Row += 1
             }
     } else {
@@ -285,7 +322,7 @@ function Write-To-Excel {
     $EmailBody += Write-To-Excel -excel $excel -workbook $workbook -RegKey $RegKey32 -Tab "Uninstall"   -BackColor 14 -FontColor 2 -LogPath $LogPath  #Teal/White
     $EmailBody += Write-To-Excel -excel $excel -workbook $workbook -RegKey $RegKey64 -Tab "Wow6432Node" -BackColor 10 -FontColor 6 -LogPath $LogPath  #Dark Green/Yellow
     $EmailBody += Write-To-Excel -excel $excel -workbook $workbook                   -Tab "winget"      -BackColor 11 -FontColor 2 -LogPath $LogPath  #Dark Blue/White
-    $EmailBody += <br />
+    $EmailBody += "<br />"
 
     $workbook.SaveAs($xlsFile) 
     $excel.Quit()
