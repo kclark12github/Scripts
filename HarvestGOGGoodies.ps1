@@ -7,9 +7,9 @@ function Format-Elapsed {
     Param($Start, $End)
     $Elapsed = ""
     $ts = New-TimeSpan -start $Start -end $End
-    if ($ts.Days > 0) {$Elapsed += "$($ts.Days) Days, "}
-    if ($ts.Hours > 0) {$Elapsed += "$($ts.Hours) Hours, "}
-    if ($ts.Minutes > 0) {$Elapsed += "$($ts.Minutes) Minutes, "}
+    if ($ts.Days -gt 0) {$Elapsed += "$($ts.Days) Days, "}
+    if ($ts.Hours -gt 0) {$Elapsed += "$($ts.Hours) Hours, "}
+    if ($ts.Minutes -gt 0) {$Elapsed += "$($ts.Minutes) Minutes, "}
     $Elapsed += "{0}.{1:000} Seconds" -f $ts.Seconds, $ts.Milliseconds
     return $Elapsed
 }
@@ -222,7 +222,7 @@ function Write-Separator {
 .{
     #Param([string]$Root,[string]$BackupFolder,[string]$LogPath)
  
-    if ($Root.Equals("")) {$Root = "E:\Games\GOG Galaxy\Games"}   #if (!($PSBoundParameters.ContainsKey('Root'))) {$Root = "E:\Games\GOG Galaxy\Games"}
+    if ($Root.Equals("")) {$Root = "D:\Games\GOG Galaxy\Games"}   #if (!($PSBoundParameters.ContainsKey('Root'))) {$Root = "D:\Games\GOG Galaxy\Games"}
     if (![System.IO.Directory]::Exists($Root)) { #if ((Test-Path -Path $Root)) {
         $Message = "Error: Specified -Root folder (""$Root"") not found!"
         Write-Host $Message -ForegroundColor Red
@@ -262,7 +262,8 @@ function Write-Separator {
     
         $Downloads = Get-ChildItem -LiteralPath $iFolder.FullName -Recurse -Depth 2 -force | Where {$_.Name -Like "!Downloads"}
         $sourceFolder = $Downloads.FullName + "\"
-        $targetFolder = $BackupFolder + "$(Get-TargetFolder -Folder $iFolder)"
+        #$targetFolder = $BackupFolder + "$(Get-TargetFolder -Folder $iFolder)"
+        $targetFolder = $BackupFolder + $iFolder.Name
         if ($Downloads -ne $null) {Write-Message "`t$($iFolder.FullName)..." -Path $LogPath}
         if (!(Test-Path -path $targetFolder)) {
             #If the target doesn't exist, there's no point in checking details, just copy it...
@@ -295,10 +296,15 @@ function Write-Separator {
                     }
 
                     if ($doCopy) {
-                        #Write-Message "`t`tCopying $($iItem.FullName) to $($targetFile)..." -Path $LogPath
-                        Write-Message "`t`tCopying $($iItem.Name) to $($targetFolder)..." -Path $LogPath
-                        Copy-Item -LiteralPath $iItem.FullName -Destination $targetFile -Force -Recurse
-                        $Copied += 1
+                        if ($iItem.Name -eq "\") {
+                            Write-Message "`t`tERROR: iItem.Name is $($iItem.Name)" -Path $LogPath
+                            $Skipped += 1
+                        } else {
+                            #Write-Message "`t`tCopying $($iItem.FullName) to $($targetFile)..." -Path $LogPath
+                            Write-Message "`t`tCopying $($iItem.Name) to $($targetFolder)..." -Path $LogPath
+                            Copy-Item -LiteralPath $iItem.FullName -Destination $targetFile -Force -Recurse
+                            $Copied += 1
+                        }
                     } else {
                         $Skipped += 1
                     }
@@ -315,5 +321,6 @@ function Write-Separator {
     $EmailBody += "<dd>$Message</dd></dl>"
     Write-Separator -Path $LogPath
 
-    Send-Mail -AppName $AppName -EmailBody $EmailBody -LogPath $LogPath
+    &"$PSScriptRoot\eMailResults.ps1" -Subject "$Root.$AppName Complete" -Body "$EmailBody" -LogFile $LogPath -AsHTML
+    #Send-Mail -AppName $AppName -EmailBody $EmailBody -LogPath $LogPath
 }
