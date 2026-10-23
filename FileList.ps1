@@ -244,8 +244,8 @@ function Write-Files {
 
     if ($Root.Contains("NAS")) {
         $EmailBody += Write-Files -Path "\\Alpha\Public" -OutFile "$($BackupFolder)ALPHA\Alpha Public Files.csv" -LogPath $LogPath
-        $EmailBody += Write-Files -Path "\\Alpha\Backups" -OutFile "$($BackupFolder)ALPHA\Alpha Backups Files.csv" -LogPath $LogPath
-        #$EmailBody += Write-Files -Path "\\Bravo\Public" -OutFile "$($BackupFolder)BRAVO\Bravo Public Files.csv" -LogPath $LogPath
+        #$EmailBody += Write-Files -Path "\\Alpha\Backups" -OutFile "$($BackupFolder)ALPHA\Alpha Backups Files.csv" -LogPath $LogPath
+        $EmailBody += Write-Files -Path "\\Bravo\Public" -OutFile "$($BackupFolder)BRAVO\Bravo Public Files.csv" -LogPath $LogPath
         $EmailBody += Write-Files -Path "\\Charlie\Public" -OutFile "$($BackupFolder)CHARLIE\Charlie Public Files.csv" -LogPath $LogPath
         $EmailBody += Write-Files -Path "\\Delta\Public" -OutFile "$($BackupFolder)DELTA\Delta Public Files.csv" -LogPath $LogPath
         $EmailBody += Write-Files -Path "\\Echo\Public" -OutFile "$($BackupFolder)ECHO\Echo Public Files.csv" -LogPath $LogPath
@@ -257,18 +257,18 @@ function Write-Files {
     }
 
     if ($Root.Contains("7X4L243")) {
-        $EmailBody += Write-Files -Path "\\7X4L243\C" -OutFile "$($BackupFolder)7X4L243\7X4L243 C Files.csv" -EmailBody $EmailBody -LogPath $LogPath
-        $EmailBody += Write-Files -Path "\\7X4L243\D" -OutFile "$($BackupFolder)7X4L243\7X4L243 D Files.csv" -EmailBody $EmailBody -LogPath $LogPath
-        #$EmailBody += Write-Files -Path "\\7X4L243\E" -OutFile "$($BackupFolder)B54J71N E Files.txt" -EmailBody $EmailBody -LogPath $LogPath
+        $EmailBody += Write-Files -Path "\\7X4L243\C" -OutFile "$($BackupFolder)7X4L243 C Files.csv" -EmailBody $EmailBody -LogPath $LogPath
+        $EmailBody += Write-Files -Path "\\7X4L243\D" -OutFile "$($BackupFolder)7X4L243 D Files.csv" -EmailBody $EmailBody -LogPath $LogPath
+        $EmailBody += Write-Files -Path "\\7X4L243\E" -OutFile "$($BackupFolder)7X4L243 E Files.txt" -EmailBody $EmailBody -LogPath $LogPath
     }
 
     if ($Root.Contains("AAIUCI4")) {
-        $EmailBody += Write-Files -Path "\\AAIUCI4\C" -OutFile "$($BackupFolder)AAIUCI4\AAIUCI4 C Files.csv" -EmailBody $EmailBody -LogPath $LogPath
-        $EmailBody += Write-Files -Path "\\AAIUCI4\D" -OutFile "$($BackupFolder)AAIUCI4\AAIUCI4 D Files.csv" -EmailBody $EmailBody -LogPath $LogPath
+        $EmailBody += Write-Files -Path "\\AAIUCI4\C" -OutFile "$($BackupFolder)AAIUCI4 C Files.csv" -EmailBody $EmailBody -LogPath $LogPath
+        $EmailBody += Write-Files -Path "\\AAIUCI4\D" -OutFile "$($BackupFolder)AAIUCI4 D Files.csv" -EmailBody $EmailBody -LogPath $LogPath
     }
     if ($Root.Contains("GGGSCP1")) {
-        $EmailBody += Write-Files -Path "\\GGGSCP1\C" -OutFile "$($BackupFolder)GGGSCP1\GGGSCP1 C Files.csv" -EmailBody $EmailBody -LogPath $LogPath
-        $EmailBody += Write-Files -Path "\\GGGSCP1\D" -OutFile "$($BackupFolder)GGGSCP1\GGGSCP1 D Files.csv" -EmailBody $EmailBody -LogPath $LogPath
+        $EmailBody += Write-Files -Path "\\GGGSCP1\C" -OutFile "$($BackupFolder)GGGSCP1 C Files.csv" -EmailBody $EmailBody -LogPath $LogPath
+        $EmailBody += Write-Files -Path "\\GGGSCP1\D" -OutFile "$($BackupFolder)GGGSCP1 D Files.csv" -EmailBody $EmailBody -LogPath $LogPath
     }
     
     $EndTime = Get-Date
