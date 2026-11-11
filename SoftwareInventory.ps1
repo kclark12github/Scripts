@@ -1,4 +1,17 @@
-﻿param([string]$Root="$($env:COMPUTERNAME)",[string]$BackupFolder,[string]$LogPath)
+﻿#SoftwareInventory.ps1
+#   Build Utility Script...
+#   Copyright © 1998-2026, Ken Clark
+#*********************************************************************************************************************************
+#   Modification History:
+#   Date:       Description:
+#   11/11/26    Enhanced to store installation data in SQL database;
+#               Added History;
+#=================================================================================================================================
+#Notes to Self:
+#  This script is scheduled to run in the Task Scheduler.
+#=================================================================================================================================
+# 
+param([string]$Root="$($env:COMPUTERNAME)",[string]$BackupFolder,[string]$LogPath)
 # Note:
 #  * Accepts input only via the pipeline, either line by line, 
 #    or as a single, multi-line string.
@@ -68,6 +81,44 @@ function ConvertFrom-FixedColumnTable {
   }
   
 }
+function DoExcel {
+    #==============================================================================================================================
+    $Message = "`nCreating new Excel file...";   Write-Message -Message $Message -Path $LogPath;    $EmailBody += "$Message<br />"
+    $excel = New-Object -ComObject excel.application 
+    $excel.visible = $false
+    $workbook = $excel.Workbooks.Add()
+
+    #==============================================================================================================================
+    $EmailBody += Write-To-Excel -excel $excel -workbook $workbook -RegKey $RegKey32 -Tab "Uninstall"   -BackColor 14 -FontColor 2 -LogPath $LogPath  #Teal/White
+    $EmailBody += Write-To-Excel -excel $excel -workbook $workbook -RegKey $RegKey64 -Tab "Wow6432Node" -BackColor 10 -FontColor 6 -LogPath $LogPath  #Dark Green/Yellow
+    $EmailBody += Write-To-Excel -excel $excel -workbook $workbook                   -Tab "winget"      -BackColor 11 -FontColor 2 -LogPath $LogPath  #Dark Blue/White
+    $EmailBody += "<br />"
+
+    $workbook.SaveAs($xlsFile) 
+    $excel.Quit()
+  
+    #Need to clean-up BackupFolder or these files will eventually get out of hand (filling the disk)...
+    $Threshold = (Get-Date).AddMonths(-1)
+    $Pattern = "$($BackupFolder)SI.$Root.*.xlsx"
+    $CleanList = Get-ChildItem $Pattern -File | Where-Object { ($_.LastWriteTime –ge $Threshold)}
+    $PurgeList = Get-ChildItem $Pattern -File | Where-Object { ($_.LastWriteTime –lt $Threshold)}
+    if ($CleanList.Count -gt 1 -and $PurgeList.Count -gt 4) {
+        $Message = "`nPurging $($PurgeList.Count) old files...";        Write-Message -Message $Message -Path $LogPath;        $EmailBody += "$Message<br />"
+        $PurgeList | ForEach-Object {
+            Write-Message -Message $_.Name -Path $LogPath; $EmailBody += "$($_.Name)<br />"
+        }
+        Get-ChildItem $Pattern -File | Where-Object { ($_.LastWriteTime –lt $Threshold)} | Remove-Item -ErrorAction SilentlyContinue -Force
+        $EmailBody += "<br />"
+    }
+}
+function DoSQL {
+    #==============================================================================================================================
+    $Message = "`nSaving installation data in $ServerName.$DatabaseName.$TableName...";   Write-Message -Message $Message -Path $LogPath;    $EmailBody += "$Message<br />"
+    $EmailBody += Write-To-SQL -Tag $RegKey32 -LogPath $LogPath
+    $EmailBody += Write-To-SQL -Tag $RegKey64 -LogPath $LogPath
+    $EmailBody += Write-To-SQL -Tag "winget"  -LogPath $LogPath
+    $EmailBody += "<br />"
+ }
 function Format-Elapsed {
     Param($Start, $End)
     $Elapsed = ""
@@ -116,10 +167,10 @@ function Write-To-Excel {
 
     if ($Tab -ne "winget") {
         $Objs = @()
-        $InstalledAppsInfos = Get-ItemProperty -Path $RegKey
+        $InstalledAppsInfos = Get-ItemProperty -Path $RegKey64
         Foreach($InstalledAppsInfo in $InstalledAppsInfos)
         {
-            $Obj = [PSCustomObject]@{Computer=$env:ComputerName;
+            $Obj = [PSCustomObject]@{Computer=$Root;
                                      DisplayName = $InstalledAppsInfo.DisplayName;
                                      Version = $InstalledAppsInfo.DisplayVersion;
                                      Publisher = $InstalledAppsInfo.Publisher;
@@ -293,6 +344,140 @@ function Write-To-Excel {
     #wmic product get Name,Vendor,Version,Description,InstallDate,InstallLocation
     #==============================================================================================================================
 }
+function Write-To-SQL {
+    Param($Tag, $LogPath)
+    $errMessage = ""
+
+    switch ($Tag) {
+        "$RegKey32" {$Tag = "Uninstall";   break}
+        "$RegKey64" {$Tag = "Wow6432Node"; break}
+        default {break}
+        }
+ 
+    $DeleteQuery = "DELETE FROM [$TableName] WHERE [System] = '$Root' And RegKey='$Tag';"
+    Invoke-Sqlcmd -ServerInstance $ServerName -Database $DatabaseName -Query $DeleteQuery -TrustServerCertificate
+
+    $Objs = @()
+    if ($Tag -ne "winget") {
+        $InstalledAppsInfos = Get-ItemProperty -Path $RegKey64 | Where-Object { $_.DisplayName -ne $null }
+        Foreach($InstalledAppsInfo in $InstalledAppsInfos)
+        {
+            $ParsedDate = [DateTime]::MinValue
+            $CleanDate  = $null
+            if (-not [string]::IsNullOrWhiteSpace($InstalledAppsInfo.InstallDate)) {
+                if ([DateTime]::TryParseExact($InstalledAppsInfo.InstallDate.Trim(), "yyyyMMdd", $null, [System.Globalization.DateTimeStyles]::None, [ref]$ParsedDate)) {
+                    $CleanDate = $ParsedDate.Date
+                }
+            }
+            $SizeMB = $null
+            if ($null -ne $InstalledAppsInfo.EstimatedSize -and $InstalledAppsInfo.EstimatedSize -gt 0) {
+                $CalculatedMB = [math]::Round(($InstalledAppsInfo.EstimatedSize / 1024), 2)
+                $SizeMB = "$CalculatedMB MB"
+            }
+
+            $Obj = [PSCustomObject]@{System=$Root;
+                                     ApplicationName = $InstalledAppsInfo.DisplayName;
+                                     Version = $InstalledAppsInfo.DisplayVersion;
+                                     Publisher = $InstalledAppsInfo.Publisher;
+                                     InstallDate = $CleanDate
+                                     EstimatedSize = $SizeMB
+                                     InstallLocation = $InstalledAppsInfo.InstallLocation;
+                                     UninstallString = $InstalledAppsInfo.UninstallString;
+                                     Source = $InstalledAppsInfo.PSPath;
+                                     RegKey = $Tag;
+                                     }
+            $Objs += $Obj
+        }
+    } else {
+       $wingetObjs = @()
+       [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new() 
+        $wingetObjs = (winget list) -match '^(\p{L}|-)' |               # filter out progress-display lines
+                                  ConvertFrom-FixedColumnTable |  # parse output into objects
+                                  Sort-Object Name |              # sort by the Name property (column)
+            ForEach-Object {
+                $Name = $_.Name
+                $Version = $_.Version
+                $Available = $_.Available
+                $Source = $_.Source
+                $Publisher = $null
+                $InstallDate = $null
+                $EstimatedSize = $null
+                $InstallLocation = $null
+                $ID = $_.ID
+                if ($Source -eq "winget") {
+                    #Parse winget show --id $_.ID to get Pulisher and other desired data
+                    $show = (winget show --id $ID) -split "`n"
+                    foreach($item in $show) {
+                        if ($item.StartsWith("Found ")) {
+                            $Name = $item.Substring("Found ".Length).Replace("[$ID]","")
+                        } elseif ($item.StartsWith("Publisher: ")) {
+                            $Publisher = $item.Substring("Publisher: ".Length)
+                        }
+                    }
+                }
+                else {
+                    $ErrorActionPreference = "Stop"
+                    Try {
+                        #First look in the 32-bit Uninstall Registry Key...
+                        $RegKey = $RegKey32.Replace("*", $ID)
+                        $reg = Get-ItemProperty -Path $RegKey
+                        $Source = "Uninstall"
+                        $Name = $reg.DisplayName
+                        $Publisher = $reg.Publisher
+                        $InstallDate = $reg.InstallDate
+                        $EstimatedSize = $reg.EstimatedSize
+                        $InstallLocation = $reg.InstallLocation
+                    } Catch [System.Management.Automation.ItemNotFoundException]{
+                        Try {
+                            #Next look in the 64-bit Uninstall Registry Key...
+                            $RegKey = $RegKey64.Replace("*", $ID)
+                            $reg = Get-ItemProperty -Path $RegKey
+                            $Source = "Wow5432Node"
+                            $Name = $reg.DisplayName
+                            $Publisher = $reg.Publisher
+                            $InstallDate = $reg.InstallDate
+                            $EstimatedSize = $reg.EstimatedSize
+                            $InstallLocation = $reg.InstallLocation
+                        } Catch [System.Management.Automation.ItemNotFoundException]{
+                            #Where Next?
+                            $Source = $null
+                        }
+                    } Finally { 
+                        $ErrorActionPreference = "Continue"
+                        $null = $reg
+                        $null = $RegKey
+                    }
+                }
+                $ParsedDate = [DateTime]::MinValue
+                $CleanDate  = $null
+                if (-not [string]::IsNullOrWhiteSpace($InstallDate)) {
+                    if ([DateTime]::TryParseExact($InstallDate.Trim(), "yyyyMMdd", $null, [System.Globalization.DateTimeStyles]::None, [ref]$ParsedDate)) {
+                        $CleanDate = $ParsedDate.Date
+                    }
+                }
+                $SizeMB = $null
+                if ($null -ne $EstimatedSize -and $EstimatedSize -gt 0) {
+                    $CalculatedMB = [math]::Round(($EstimatedSize / 1024), 2)
+                    $SizeMB = "$CalculatedMB MB"
+                }
+                $Obj = [PSCustomObject]@{System=$Root;
+                                     ApplicationName = $Name;
+                                     Version = $Version;
+                                     Publisher = $Publisher;
+                                     InstallDate = $CleanDate
+                                     EstimatedSize = $SizeMB
+                                     InstallLocation = $InstallLocation;
+                                     UninstallString = $null;
+                                     Source = $Source;
+                                     RegKey = $Tag;
+                                     }
+                $Objs += $Obj
+            }
+    }
+
+    # Insert the fresh data
+    $Objs | Write-SqlTableData -ServerInstance $ServerName -DatabaseName $DatabaseName -SchemaName "dbo" -TableName $TableName -TrustServerCertificate
+}
 .{
     $AppName = "SoftwareInventory"
     $StartTime = Get-Date
@@ -308,39 +493,14 @@ function Write-To-Excel {
     $now = Get-Date -Format "yyyyMMdd.HHmmss"
     $xlsFile = "$($BackupFolder)SI.$Root.$now.xlsx";    
     $Message = "xlsFile: $xlsFile";              Write-Message -Message $Message -Path $LogPath;    $EmailBody += "$Message<br /><br />"
-
+    
+    $ServerName = "7X4L243"; $DatabaseName = "TreasureChest2"; $TableName = "Apps"
     $RegKey32 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
     $RegKey64 = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
     
-    #==============================================================================================================================
-    $Message = "`nCreating new Excel file...";   Write-Message -Message $Message -Path $LogPath;    $EmailBody += "$Message<br />"
-    $excel = New-Object -ComObject excel.application 
-    $excel.visible = $false
-    $workbook = $excel.Workbooks.Add()
-
-    #==============================================================================================================================
-    $EmailBody += Write-To-Excel -excel $excel -workbook $workbook -RegKey $RegKey32 -Tab "Uninstall"   -BackColor 14 -FontColor 2 -LogPath $LogPath  #Teal/White
-    $EmailBody += Write-To-Excel -excel $excel -workbook $workbook -RegKey $RegKey64 -Tab "Wow6432Node" -BackColor 10 -FontColor 6 -LogPath $LogPath  #Dark Green/Yellow
-    $EmailBody += Write-To-Excel -excel $excel -workbook $workbook                   -Tab "winget"      -BackColor 11 -FontColor 2 -LogPath $LogPath  #Dark Blue/White
-    $EmailBody += "<br />"
-
-    $workbook.SaveAs($xlsFile) 
-    $excel.Quit()
-    
-    #Need to clean-up BackupFolder or these files will eventually get out of hand (filling the disk)...
-    $Threshold = (Get-Date).AddMonths(-1)
-    $Pattern = "$($BackupFolder)SI.$Root.*.xlsx"
-    $CleanList = Get-ChildItem $Pattern -File | Where-Object { ($_.LastWriteTime –ge $Threshold)}
-    $PurgeList = Get-ChildItem $Pattern -File | Where-Object { ($_.LastWriteTime –lt $Threshold)}
-    if ($CleanList.Count -gt 1 -and $PurgeList.Count -gt 4) {
-        $Message = "`nPurging $($PurgeList.Count) old files...";        Write-Message -Message $Message -Path $LogPath;        $EmailBody += "$Message<br />"
-        $PurgeList | ForEach-Object {
-            Write-Message -Message $_.Name -Path $LogPath; $EmailBody += "$($_.Name)<br />"
-        }
-        Get-ChildItem $Pattern -File | Where-Object { ($_.LastWriteTime –lt $Threshold)} | Remove-Item -ErrorAction SilentlyContinue -Force
-        $EmailBody += "<br />"
-    }
-
+    DoExcel
+    DoSQL
+ 
     $EndTime = Get-Date
     $Message = "`n$AppName Complete @ $("{0:hh:mm:ss tt}" -f $EndTime) (Elapsed: $(Format-Elapsed -Start $StartTime -End $EndTime))"; 
     Write-Message -Message $Message -Path $LogPath;    $EmailBody += "$Message<br /><br />"
