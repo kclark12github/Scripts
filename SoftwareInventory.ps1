@@ -505,7 +505,7 @@ function Write-To-SQL {
     $RegKey32 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
     $RegKey64 = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
     
-    #DoExcel
+    DoExcel
     DoSQL
  
     $EndTime = Get-Date
