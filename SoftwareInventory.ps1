@@ -228,7 +228,8 @@ function Write-To-Excel {
     $Row = 2
 
     if ($Tab -eq "winget") {
-        [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new() 
+        #[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new() 
+        try {[Console]::OutputEncoding = [System.Text.Encoding]::UTF8} catch {}   # Ignore invalid handle errors in ISE or background Task Scheduler sessions
         $Objs = (winget list) -match '^(\p{L}|-)' |               # filter out progress-display lines
                                   ConvertFrom-FixedColumnTable |  # parse output into objects
                                   Sort-Object Name |              # sort by the Name property (column)
@@ -355,7 +356,7 @@ function Write-To-SQL {
         }
  
     $DeleteQuery = "DELETE FROM [$TableName] WHERE [System] = '$Root' And RegKey='$Tag';"
-    Invoke-Sqlcmd -ServerInstance $ServerName -Database $DatabaseName -Query $DeleteQuery -TrustServerCertificate
+    Invoke-Sqlcmd -ServerInstance $ServerName -Database $DatabaseName -Credential $cred -Query $DeleteQuery -TrustServerCertificate
 
     $Objs = @()
     if ($Tag -ne "winget") {
@@ -389,8 +390,9 @@ function Write-To-SQL {
             $Objs += $Obj
         }
     } else {
-       $wingetObjs = @()
-       [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new() 
+        $wingetObjs = @()
+        #$OutputEncoding = [System.Text.Encoding]::UTF8
+        try {[Console]::OutputEncoding = [System.Text.Encoding]::UTF8} catch {}   # Ignore invalid handle errors in ISE or background Task Scheduler sessions
         $wingetObjs = (winget list) -match '^(\p{L}|-)' |               # filter out progress-display lines
                                   ConvertFrom-FixedColumnTable |  # parse output into objects
                                   Sort-Object Name |              # sort by the Name property (column)
@@ -476,12 +478,15 @@ function Write-To-SQL {
     }
 
     # Insert the fresh data
-    $Objs | Write-SqlTableData -ServerInstance $ServerName -DatabaseName $DatabaseName -SchemaName "dbo" -TableName $TableName -TrustServerCertificate
+
+    $Objs | Write-SqlTableData -ServerInstance $ServerName -DatabaseName $DatabaseName -Credential $cred -SchemaName "dbo" -TableName $TableName -TrustServerCertificate
 }
 .{
     $AppName = "SoftwareInventory"
     $StartTime = Get-Date
     $Message = "[$AppName © $("{0:yyyy}" -f $StartTime), Ken Clark                       $("{0:MM/dd/yy} {0:hh:mm:ss tt}" -f $StartTime)]"
+    $username = "KCLARK"; $password = "b2Spirit" | ConvertTo-SecureString -AsPlainText -Force
+    $cred = New-Object System.Management.Automation.PSCredential ($username, $password)
 
     if ($BackupFolder.Equals("")) {$BackupFolder = "$($Env:OneDrive)\Backups\$Root\"}  #$($Env:BackupRoot)\
     if ($LogPath.Equals("")) {$LogPath = "$BackupFolder$Root.$AppName.log"}
