@@ -4,6 +4,7 @@
 #*********************************************************************************************************************************
 #   Modification History:
 #   Date:       Description:
+#   11/12/26    Moved UserName and Password into environment variables & added Inventoried date;
 #   11/11/26    Enhanced to store installation data in SQL database;
 #               Added History;
 #=================================================================================================================================
@@ -347,7 +348,6 @@ function Write-To-Excel {
 }
 function Write-To-SQL {
     Param($Tag, $LogPath)
-    $errMessage = ""
 
     switch ($Tag) {
         "$RegKey32" {$Tag = "Uninstall";   break}
@@ -355,8 +355,12 @@ function Write-To-SQL {
         default {break}
         }
  
+    $username = $env:TC2User; $password = ConvertTo-SecureString $env:TC2Password -AsPlainText -Force; $password.MakeReadOnly()
+    $cred = New-Object System.Management.Automation.PSCredential ($username, $password)
     $DeleteQuery = "DELETE FROM [$TableName] WHERE [System] = '$Root' And RegKey='$Tag';"
     Invoke-Sqlcmd -ServerInstance $ServerName -Database $DatabaseName -Credential $cred -Query $DeleteQuery -TrustServerCertificate
+
+    $Inventoried = (Get-Date).Date
 
     $Objs = @()
     if ($Tag -ne "winget") {
@@ -386,11 +390,11 @@ function Write-To-SQL {
                                      UninstallString = $InstalledAppsInfo.UninstallString;
                                      Source = $InstalledAppsInfo.PSPath;
                                      RegKey = $Tag;
+                                     Inventoried = $Inventoried;
                                      }
             $Objs += $Obj
         }
     } else {
-        $wingetObjs = @()
         #$OutputEncoding = [System.Text.Encoding]::UTF8
         try {[Console]::OutputEncoding = [System.Text.Encoding]::UTF8} catch {}   # Ignore invalid handle errors in ISE or background Task Scheduler sessions
         $wingetObjs = (winget list) -match '^(\p{L}|-)' |               # filter out progress-display lines
@@ -399,7 +403,6 @@ function Write-To-SQL {
             ForEach-Object {
                 $Name = $_.Name
                 $Version = $_.Version
-                $Available = $_.Available
                 $Source = $_.Source
                 $Publisher = $null
                 $InstallDate = $null
@@ -472,6 +475,7 @@ function Write-To-SQL {
                                      UninstallString = $null;
                                      Source = $Source;
                                      RegKey = $Tag;
+                                     Inventoried = $Inventoried
                                      }
                 $Objs += $Obj
             }
@@ -485,8 +489,6 @@ function Write-To-SQL {
     $AppName = "SoftwareInventory"
     $StartTime = Get-Date
     $Message = "[$AppName © $("{0:yyyy}" -f $StartTime), Ken Clark                       $("{0:MM/dd/yy} {0:hh:mm:ss tt}" -f $StartTime)]"
-    $username = "KCLARK"; $password = "b2Spirit" | ConvertTo-SecureString -AsPlainText -Force
-    $cred = New-Object System.Management.Automation.PSCredential ($username, $password)
 
     if ($BackupFolder.Equals("")) {$BackupFolder = "$($Env:OneDrive)\Backups\$Root\"}  #$($Env:BackupRoot)\
     if ($LogPath.Equals("")) {$LogPath = "$BackupFolder$Root.$AppName.log"}
@@ -503,7 +505,7 @@ function Write-To-SQL {
     $RegKey32 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
     $RegKey64 = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
     
-    DoExcel
+    #DoExcel
     DoSQL
  
     $EndTime = Get-Date
