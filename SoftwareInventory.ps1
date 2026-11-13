@@ -14,6 +14,7 @@
 #  This script is scheduled to run in the Task Scheduler.
 #=================================================================================================================================
 # 
+Import-Module MyTools
 param([string]$Root="$($env:COMPUTERNAME)",[string]$BackupFolder,[string]$LogPath)
 # Note:
 #  * Accepts input only via the pipeline, either line by line, 
@@ -137,16 +138,6 @@ function DoSQL {
     $EmailBody += Write-To-SQL -Infos $WinGetInfos   -LogPath $LogPath
     $EmailBody += "<br />"
  }
-function Format-Elapsed {
-    Param($Start, $End)
-    $Elapsed = ""
-    $ts = New-TimeSpan -start $Start -end $End
-    if ($ts.Days -gt 0) {$Elapsed += "$($ts.Days) Days, "}
-    if ($ts.Hours -gt 0) {$Elapsed += "$($ts.Hours) Hours, "}
-    if ($ts.Minutes -gt 0) {$Elapsed += "$($ts.Minutes) Minutes, "}
-    $Elapsed += "{0}.{1:000} Seconds" -f $ts.Seconds, $ts.Milliseconds
-    return $Elapsed
-}
 function GetInstalledAppsInfo {
     Param($RegKey, $Tag)
     #$wteMessage = "Gathering installation information from registry ($Tag)..."; Write-Message -Message $wteMessage -Path $LogPath
@@ -158,8 +149,8 @@ function GetInstalledAppsInfo {
                                     ApplicationName = $InstalledAppsInfo.DisplayName;
                                     Version = $InstalledAppsInfo.DisplayVersion;
                                     Publisher = $InstalledAppsInfo.Publisher;
-                                    InstallDate = to-Date($InstalledAppsInfo.InstallDate);
-                                    EstimatedSize = Size-To-String($InstalledAppsInfo.EstimatedSize);
+                                    InstallDate = ConvertTo-Date($InstalledAppsInfo.InstallDate);
+                                    EstimatedSize = ConvertTo-SizeString($InstalledAppsInfo.EstimatedSize);
                                     InstallLocation = $InstalledAppsInfo.InstallLocation;
                                     UninstallString = $InstalledAppsInfo.UninstallString;
                                     Source = $InstalledAppsInfo.PSPath;
@@ -207,8 +198,8 @@ function GetWinGetInfo {
                     $Source = "Uninstall"
                     $Name = $reg.DisplayName
                     $Publisher = $reg.Publisher
-                    $InstallDate = to-Date($reg.InstallDate)
-                    $EstimatedSize = Size-To-String($reg.EstimatedSize)
+                    $InstallDate = ConvertTo-Date($reg.InstallDate)
+                    $EstimatedSize = ConvertTo-SizeString($reg.EstimatedSize)
                     $InstallLocation = $reg.InstallLocation
                 } Catch [System.Management.Automation.ItemNotFoundException]{
                     Try {
@@ -218,8 +209,8 @@ function GetWinGetInfo {
                         $Source = "Wow5432Node"
                         $Name = $reg.DisplayName
                         $Publisher = $reg.Publisher
-                        $InstallDate = to-Date($reg.InstallDate)
-                        $EstimatedSize = Size-To-String($reg.EstimatedSize)
+                        $InstallDate = ConvertTo-Date($reg.InstallDate)
+                        $EstimatedSize = ConvertTo-SizeString($reg.EstimatedSize)
                         $InstallLocation = $reg.InstallLocation
                     } Catch [System.Management.Automation.ItemNotFoundException]{
                         #Where Next?
@@ -235,8 +226,8 @@ function GetWinGetInfo {
                                     ApplicationName = $Name;
                                     Version = $Version;
                                     Publisher = $Publisher;
-                                    InstallDate = to-Date($InstalledAppsInfo.InstallDate);
-                                    EstimatedSize = Size-To-String($InstalledAppsInfo.EstimatedSize);
+                                    InstallDate = ConvertTo-Date($InstalledAppsInfo.InstallDate);
+                                    EstimatedSize = ConvertTo-SizeString($InstalledAppsInfo.EstimatedSize);
                                     InstallLocation = $InstallLocation;
                                     UninstallString = $null;
                                     Source = $Source;
@@ -246,31 +237,6 @@ function GetWinGetInfo {
             $Objs += $Obj
         }
     $Objs
-}
-function Send-Mail {
-    Param($AppName, $EmailBody, $LogPath)
-    $PW = ConvertTo-SecureString $env:SMTP_PW -AsPlainText -Force
-    $Creds = New-Object System.Management.Automation.PSCredential ($env:SMTP_USER, $PW)
-    $Server = $env:SMTP_ADDRESS+":"+$env:SMTP_PORT
-    Send-MailMessage -From "$env:USERNAME <$env:My_EMAIL>" -To "$env:USERNAME <$env:My_EMAIL>" -Subject "$AppName Succeeded!" -Body $EmailBody -BodyAsHtml -Attachments $LogPath -SmtpServer $env:SMTP_ADDRESS -Port $env:SMTP_PORT -Credential $Creds
-}
-function Write-Log {
-    Param($Message, $Path = ".")
-    function TS {return "[{0:MM/dd/yy} {0:HH:mm:ss tt}]" -f (Get-Date)}
-    Write-Message -Message "$(TS) $Message" -Path $Path
-}
-function Write-Message {
-    Param($Message, $Path = ".")
-    #"$Message" | Tee-Object -FilePath $Path -Append | Write-Output
-    Add-Content -Path $Path -Value $Message -Encoding utf8
-    Write-Output $Message
-}
-function Write-Separator {
-    Param($Path = ".")
-    #                      1         2         3         4         5         6         7         8
-    #             12345678901234567890123456789012345678901234567890123456789012345678901234567890
-    $Separator = "--------------------------------------------------------------------------------"
-    Write-Message -Message $Separator -Path $Path
 }
 function Write-To-Excel {
     Param($excel, $workbook, $Infos, $Tab, $BackColor, $FontColor=2, $LogPath)
@@ -354,26 +320,6 @@ function Write-To-Excel {
     #wmic product get Name,Vendor,Version,Description,InstallDate,InstallLocation
     #==============================================================================================================================
 }
-function to-Date {
-    Param($DirtyDate)
-    $ParsedDate = [DateTime]::MinValue
-    $CleanDate  = $null
-    if (-not [string]::IsNullOrWhiteSpace($DirtyDate)) {
-        if ([DateTime]::TryParseExact($DirtyDate.Trim(), "yyyyMMdd", $null, [System.Globalization.DateTimeStyles]::None, [ref]$ParsedDate)) {
-            $CleanDate = $ParsedDate.Date
-        }
-    }
-    $CleanDate
-}
-function Size-To-String {
-    Param($size)
-    $SizeMB = $null
-    if ($null -ne $size -and $size -gt 0) {
-        $CalculatedMB = [math]::Round(($size / 1024), 2)
-        $SizeMB = "$CalculatedMB MB"
-    }
-    $SizeMB
-}
 function Write-To-SQL {
     Param($Infos, $LogPath)
     $wteMessage = "Saving $Tab data to $ServerName.$DatabaseName.$TableName..."
@@ -408,6 +354,5 @@ function Write-To-SQL {
     Write-Message -Message $Message -Path $LogPath;    $EmailBody += "$Message<br /><br />"
     Write-Separator -Path $LogPath
         
-    &"$PSScriptRoot\eMailResults.ps1" -Subject "$Root.$AppName Complete" -Body "$EmailBody" -LogFile $LogPath -AsHTML
-    #Send-Mail -AppName $AppName -EmailBody $EmailBody -LogPath $LogPath
+    Send-EmailResults  -Subject "$Root.$AppName Complete" -Body "$EmailBody" -LogFile $LogPath -AsHTML
 }

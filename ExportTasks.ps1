@@ -56,7 +56,7 @@ function Export-Tasks {
         $EmailBody += $Message + "<br /><br />"
     }
 
-    $EmailBody += Export-Tasks -OutFile "$($BackupFolder)$($Root)\Ken's Tasks.xml" -LogPath $LogPath
+    $EmailBody += Export-Tasks -OutFile "$($BackupFolder)Ken's Tasks.xml" -LogPath $LogPath
     
     $EndTime = Get-Date
     $Message = "`n$AppName Complete @ $("{0:hh:mm:ss tt}" -f $EndTime) (Elapsed: $(Format-Elapsed -Start $StartTime -End $EndTime))"

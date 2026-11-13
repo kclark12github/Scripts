@@ -15,7 +15,7 @@
 param([string]$Subject, [string]$Body, [string]$LogFile, [switch]$AsHTML=$False)
 
 $User = $env:SMTP_USER
-$PWord = ConvertTo-SecureString $env:SMTP_PW -AsPlainText -Force
+$PWord = ConvertTo-SecureString $env:SMTP_PW -AsPlainText -Force; $PWord.MakeReadOnly()
 $Credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $User, $PWord
 
 #$LogContent = Get-Content -Path $LogFile -Raw
@@ -25,13 +25,18 @@ $email = @{
     From = "$env:USERNAME <$env:My_EMAIL>"
     To = "$env:USERNAME <$env:My_EMAIL>"
     Subject = $Subject
-    SMTPServer = $env:SMTP_ADDRESS
+    Server = $env:SMTP_ADDRESS
     Port = [int]$env:SMTP_PORT
-    Body = $Body
-    BodyAsHtml = [bool]$AsHTML
     Attachments = $LogFile
     Credential = $Credential
     SecureSocketOptions = 'Auto' # Automatically negotiates SSL/TLS cleanly
 }
-Send-EmailMessage @email
-
+if ($AsHTML) {
+    $email['HTML'] = $Body
+} else {
+    $email['Text'] = $Body
+}
+$MailResult = Send-EmailMessage @email
+if (-not $MailResult.Status) {
+    Write-Warning "Email delivery failed: $($MailResult.Error)"
+}
