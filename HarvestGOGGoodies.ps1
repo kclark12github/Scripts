@@ -460,13 +460,6 @@ function Get-TargetFolder {
 
     return $Folder.Name
 }
-function Send-Mail {
-    Param($AppName, $EmailBody, $LogPath)
-    $PW = ConvertTo-SecureString $env:SMTP_PW -AsPlainText -Force
-    $Creds = New-Object System.Management.Automation.PSCredential ($env:SMTP_USER, $PW)
-    $Server = $env:SMTP_ADDRESS+":"+$env:SMTP_PORT
-    Send-MailMessage -From "$env:USERNAME <$env:My_EMAIL>" -To "$env:USERNAME <$env:My_EMAIL>" -Subject "$AppName Succeeded!" -Body $EmailBody -BodyAsHtml -Attachments $LogPath -SmtpServer $env:SMTP_ADDRESS -Port $env:SMTP_PORT -Credential $Creds
-}
 function Write-Log {
     Param($Message, $Path = ".")
     function TS {return "[{0:MM/dd/yy} {0:HH:mm:ss tt}]" -f (Get-Date)}
@@ -474,7 +467,9 @@ function Write-Log {
 }
 function Write-Message {
     Param($Message, $Path = ".")
-    "$Message" | Tee-Object -FilePath $Path -Append | Write-Output
+    #"$Message" | Tee-Object -FilePath $Path -Append | Write-Output
+    Add-Content -Path $Path -Value $Message -Encoding utf8
+    Write-Output $Message
 }
 function Write-Separator {
     Param($Path = ".")
@@ -605,5 +600,4 @@ function Write-Separator {
     Write-Separator -Path $LogPath
 
     &"$PSScriptRoot\eMailResults.ps1" -Subject "$Root.$AppName Complete" -Body "$EmailBody" -LogFile $LogPath -AsHTML
-    #Send-Mail -AppName $AppName -EmailBody $EmailBody -LogPath $LogPath
 }

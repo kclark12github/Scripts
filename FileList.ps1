@@ -192,13 +192,6 @@ function Get-TargetFolder {
     if ($Folder.Name.StartsWith("Zork")) {return "Infocom\Zork\Zork 1 - The Great Underground Empire"}
     return $Folder.Name
 }
-function Send-Mail {
-    Param($AppName, $EmailBody, $LogPath)
-    $PW = ConvertTo-SecureString $env:SMTP_PW -AsPlainText -Force
-    $Creds = New-Object System.Management.Automation.PSCredential ($env:SMTP_USER, $PW)
-    $Server = $env:SMTP_ADDRESS+":"+$env:SMTP_PORT
-    Send-MailMessage -From "$env:USERNAME <$env:My_EMAIL>" -To "$env:USERNAME <$env:My_EMAIL>" -Subject "$AppName Succeeded!" -Body $EmailBody -BodyAsHtml -Attachments $LogPath -SmtpServer $env:SMTP_ADDRESS -Port $env:SMTP_PORT -Credential $Creds
-}
 function Write-Log {
     Param($Message, $Path = ".")
     function TS {return "[{0:MM/dd/yy} {0:HH:mm:ss tt}]" -f (Get-Date)}
@@ -206,7 +199,9 @@ function Write-Log {
 }
 function Write-Message {
     Param($Message, $Path = ".")
-    "$Message" | Tee-Object -FilePath $Path -Append | Write-Output
+    #"$Message" | Tee-Object -FilePath $Path -Append | Write-Output
+    Add-Content -Path $Path -Value $Message -Encoding utf8
+    Write-Output $Message
 }
 function Write-Separator {
     Param($Path = ".")
@@ -259,7 +254,7 @@ function Write-Files {
     if ($Root.Contains("7X4L243")) {
         $EmailBody += Write-Files -Path "\\7X4L243\C" -OutFile "$($BackupFolder)7X4L243 C Files.csv" -EmailBody $EmailBody -LogPath $LogPath
         $EmailBody += Write-Files -Path "\\7X4L243\D" -OutFile "$($BackupFolder)7X4L243 D Files.csv" -EmailBody $EmailBody -LogPath $LogPath
-        $EmailBody += Write-Files -Path "\\7X4L243\E" -OutFile "$($BackupFolder)7X4L243 E Files.txt" -EmailBody $EmailBody -LogPath $LogPath
+        $EmailBody += Write-Files -Path "\\7X4L243\E" -OutFile "$($BackupFolder)7X4L243 E Files.csv" -EmailBody $EmailBody -LogPath $LogPath
     }
 
     if ($Root.Contains("AAIUCI4")) {

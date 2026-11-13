@@ -6,6 +6,7 @@
 #   Date:       Description:
 #   11/12/26    Moved UserName and Password into environment variables & added Inventoried date;
 #               Reorganized so registry information is only gathered once;
+#               Upgraded to PowerShell 7.7.0;
 #   11/11/26    Enhanced to store installation data in SQL database;
 #               Added History;
 #=================================================================================================================================
@@ -260,7 +261,9 @@ function Write-Log {
 }
 function Write-Message {
     Param($Message, $Path = ".")
-    "$Message" | Tee-Object -FilePath $Path -Append | Write-Output
+    #"$Message" | Tee-Object -FilePath $Path -Append | Write-Output
+    Add-Content -Path $Path -Value $Message -Encoding utf8
+    Write-Output $Message
 }
 function Write-Separator {
     Param($Path = ".")

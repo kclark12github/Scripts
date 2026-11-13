@@ -1,0 +1,31 @@
+$TargetComputers = @("AAIUCI4")
+
+# 2. Define the credentials to push to the remote machines
+$SqlUser = $env:SQL_INVENTORY_USER
+$SqlPass = $env:SQL_INVENTORY_PASS
+
+# 3. Deploy prerequisites across all target machines
+Invoke-Command -ComputerName $TargetComputers -ScriptBlock {
+    param($User, $Pass)
+
+    Write-Host "Configuring $env:COMPUTERNAME..." -ForegroundColor Cyan
+
+    # Install PowerShell 7 silently via winget if not already installed
+    if (-not (Test-Path "C:\Program Files\PowerShell\7\pwsh.exe")) {
+        winget install --id Microsoft.PowerShell --source winget --silent --accept-package-agreements --accept-source-agreements
+    }
+
+    # Set Machine-level environment variables so any user or scheduled task can read them
+    [System.Environment]::SetEnvironmentVariable("SQL_INVENTORY_USER", $User, "Machine")
+    [System.Environment]::SetEnvironmentVariable("SQL_INVENTORY_PASS", $Pass, "Machine")
+
+    # Install the SqlServer module using PowerShell 7 in AllUsers scope
+    & "C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -Command {
+        if (-not (Get-Module -ListAvailable -Name SqlServer)) {
+            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force | Out-Null
+            Install-Module -Name SqlServer -Scope AllUsers -Force -AllowClobber
+        }
+    }
+
+    Write-Host "Completed $env:COMPUTERNAME." -ForegroundColor Green
+} -ArgumentList $SqlUser, $SqlPass
