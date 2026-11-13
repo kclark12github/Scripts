@@ -1,18 +1,14 @@
-﻿[cmdletbinding()]
-Param([string]$Root,
-    [string]$BackupFolder,
-    [string]$LogPath)
-
-function Format-Elapsed {
-    Param($Start, $End)
-    $Elapsed = ""
-    $ts = New-TimeSpan -start $Start -end $End
-    if ($ts.Days -gt 0) {$Elapsed += "$($ts.Days) Days, "}
-    if ($ts.Hours -gt 0) {$Elapsed += "$($ts.Hours) Hours, "}
-    if ($ts.Minutes -gt 0) {$Elapsed += "$($ts.Minutes) Minutes, "}
-    $Elapsed += "{0}.{1:000} Seconds" -f $ts.Seconds, $ts.Milliseconds
-    return $Elapsed
-}
+﻿#HarvestGOGGoodies.ps1
+#   Script to backup GOG Goodies files...
+#   Copyright © 1998-2026, Ken Clark
+#*********************************************************************************************************************************
+#   Modification History:
+#   Date:       Description:
+#   11/13/26    Added History;
+#=================================================================================================================================
+[cmdletbinding()]
+Param([string]$Root,[string]$BackupFolder,[string]$LogPath)
+Import-Module MyTools
 function Old-Get-TargetFolder {
   param ($Folder)
 
@@ -460,24 +456,6 @@ function Get-TargetFolder {
 
     return $Folder.Name
 }
-function Write-Log {
-    Param($Message, $Path = ".")
-    function TS {return "[{0:MM/dd/yy} {0:HH:mm:ss tt}]" -f (Get-Date)}
-    Write-Message -Message "$(TS) $Message" -Path $Path
-}
-function Write-Message {
-    Param($Message, $Path = ".")
-    #"$Message" | Tee-Object -FilePath $Path -Append | Write-Output
-    Add-Content -Path $Path -Value $Message -Encoding utf8
-    Write-Output $Message
-}
-function Write-Separator {
-    Param($Path = ".")
-    #                      1         2         3         4         5         6         7         8
-    #             12345678901234567890123456789012345678901234567890123456789012345678901234567890
-    $Separator = "--------------------------------------------------------------------------------"
-    Write-Message -Message $Separator -Path $Path
-}
 .{
     #Param([string]$Root,[string]$BackupFolder,[string]$LogPath)
  
@@ -599,5 +577,5 @@ function Write-Separator {
     $EmailBody += "<dd>$Message</dd></dl>"
     Write-Separator -Path $LogPath
 
-    &"$PSScriptRoot\eMailResults.ps1" -Subject "$Root.$AppName Complete" -Body "$EmailBody" -LogFile $LogPath -AsHTML
+    Send-EmailResults  -Subject "$Root.$AppName Complete" -Body "$EmailBody" -LogFile $LogPath -AsHTML
 }

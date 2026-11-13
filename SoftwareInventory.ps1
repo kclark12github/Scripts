@@ -14,7 +14,6 @@
 #  This script is scheduled to run in the Task Scheduler.
 #=================================================================================================================================
 # 
-Import-Module MyTools
 param([string]$Root="$($env:COMPUTERNAME)",[string]$BackupFolder,[string]$LogPath)
 # Note:
 #  * Accepts input only via the pipeline, either line by line, 
@@ -24,6 +23,7 @@ param([string]$Root="$($env:COMPUTERNAME)",[string]$BackupFolder,[string]$LogPat
 #    * Column names are assumed to be *single words* (must not contain spaces).
 #  * The header line is assumed to be followed by a separator line
 #    (its format doesn't matter).
+Import-Module MyTools
 function ConvertFrom-FixedColumnTable {
   [CmdletBinding()]
   param(

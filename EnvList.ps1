@@ -1,39 +1,29 @@
-﻿param([string]$Root="$($env:COMPUTERNAME)",[string]$BackupFolder,[string]$LogPath)
-function Format-Elapsed {
-    Param($Start, $End)
-    $Elapsed = ""
-    $ts = New-TimeSpan -start $Start -end $End
-    if ($ts.Days -gt 0) {$Elapsed += "$($ts.Days) Days, "}
-    if ($ts.Hours -gt 0) {$Elapsed += "$($ts.Hours) Hours, "}
-    if ($ts.Minutes -gt 0) {$Elapsed += "$($ts.Minutes) Minutes, "}
-    $Elapsed += "{0}.{1:000} Seconds" -f $ts.Seconds, $ts.Milliseconds
-    return $Elapsed
-}
-function Write-Log {
-    Param($Message, $Path = ".")
-    function TS {return "[{0:MM/dd/yy} {0:HH:mm:ss tt}]" -f (Get-Date)}
-    Write-Message -Message "$(TS) $Message" -Path $Path
-}
-function Write-Message {
-    Param($Message, $Path = ".")
-    #"$Message" | Tee-Object -FilePath $Path -Append | Write-Output
-    Add-Content -Path $Path -Value $Message -Encoding utf8
-    Write-Output $Message
-}
-function Write-Separator {
-    Param($Path = ".")
-    #                      1         2         3         4         5         6         7         8
-    #             12345678901234567890123456789012345678901234567890123456789012345678901234567890
-    $Separator = "--------------------------------------------------------------------------------"
-    Write-Message -Message $Separator -Path $Path
-}
+﻿#EnvList.ps1
+#   Script to export environment variable definitions  (for backup/restore purposes)...
+#   Copyright © 1998-2026, Ken Clark
+#*********************************************************************************************************************************
+#   Modification History:
+#   Date:       Description:
+#   11/13/26    Added History;
+#=================================================================================================================================
+param([string]$Root="$($env:COMPUTERNAME)",[string]$BackupFolder,[string]$LogPath)
+Import-Module MyTools
 function Write-Vars {
     Param($OutFile, $LogPath)
 
     $Message = "Listing Environment Variables on $Root to $OutFile"
     Write-Message -Message $Message -Path $LogPath
 
-    dir env: > "$OutFile"
+    $fileName = Split-Path -Path $OutFile -Leaf
+    $tempOutFile = Join-Path -Path $env:TEMP -ChildPath $fileName
+
+    $ExportData = [PSCustomObject]@{
+        User    = [System.Environment]::GetEnvironmentVariables("User")
+        Machine = [System.Environment]::GetEnvironmentVariables("Machine")
+    }
+
+    $ExportData | ConvertTo-Json -Depth 3 | Out-File -FilePath $tempOutFile -Encoding utf8
+    Move-Item -Path $tempOutFile -Destination $OutFile -Force
 
     $Message + "<br /><br />"
 }
@@ -56,7 +46,7 @@ function Write-Vars {
         $EmailBody += $Message + "<br /><br />"
     }
 
-    $EmailBody += Write-Vars -OutFile "$($BackupFolder)$($Root)\Environment Variables.txt" -LogPath $LogPath
+    $EmailBody += Write-Vars -OutFile "$($BackupFolder)$($Root).Environment Variables.json" -LogPath $LogPath
     
     $EndTime = Get-Date
     $Message = "`n$AppName Complete @ $("{0:hh:mm:ss tt}" -f $EndTime) (Elapsed: $(Format-Elapsed -Start $StartTime -End $EndTime))"
@@ -64,9 +54,5 @@ function Write-Vars {
     $EmailBody += "<br />$Message"
     Write-Separator -Path $LogPath
 
-
-    #write-output "$EmailBody"
-
-
-    &"$PSScriptRoot\eMailResults.ps1" -Subject "$Root.$AppName Complete" -Body "$EmailBody" -LogFile $LogPath -AsHTML
+    Send-EmailResults  -Subject "$Root.$AppName Complete" -Body "$EmailBody" -LogFile $LogPath -AsHTML
 }
