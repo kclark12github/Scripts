@@ -5,6 +5,7 @@
 #   Modification History:
 #   Date:       Description:
 #   11/12/26    Moved UserName and Password into environment variables & added Inventoried date;
+#               Reorganized so registry information is only gathered once;
 #   11/11/26    Enhanced to store installation data in SQL database;
 #               Added History;
 #=================================================================================================================================
@@ -90,14 +91,23 @@ function DoExcel {
     $workbook = $excel.Workbooks.Add()
 
     #==============================================================================================================================
-    $EmailBody += Write-To-Excel -excel $excel -workbook $workbook -RegKey $RegKey32 -Tab "Uninstall"   -BackColor 14 -FontColor 2 -LogPath $LogPath  #Teal/White
-    $EmailBody += Write-To-Excel -excel $excel -workbook $workbook -RegKey $RegKey64 -Tab "Wow6432Node" -BackColor 10 -FontColor 6 -LogPath $LogPath  #Dark Green/Yellow
-    $EmailBody += Write-To-Excel -excel $excel -workbook $workbook                   -Tab "winget"      -BackColor 11 -FontColor 2 -LogPath $LogPath  #Dark Blue/White
+    $EmailBody += Write-To-Excel -excel $excel -workbook $workbook -Infos $RegKey32Infos -Tab "Uninstall"   -BackColor 14 -FontColor 2 -LogPath $LogPath  #Teal/White
+    $EmailBody += Write-To-Excel -excel $excel -workbook $workbook -Infos $RegKey64Infos -Tab "Wow6432Node" -BackColor 10 -FontColor 6 -LogPath $LogPath  #Dark Green/Yellow
+    $EmailBody += Write-To-Excel -excel $excel -workbook $workbook -Infos $WinGetInfos   -Tab "winget"      -BackColor 11 -FontColor 2 -LogPath $LogPath  #Dark Blue/White
     $EmailBody += "<br />"
 
-    $workbook.SaveAs($xlsFile) 
+    $fileName = Split-Path -Path $xlsFile -Leaf
+    $tempXlsFile = Join-Path -Path $env:TEMP -ChildPath $fileName
+
+    $excel.DisplayAlerts = $false
+    $workbook.SaveAs($tempXlsFile,51); $workbook.Saved = $true; $workbook.Close($false)
     $excel.Quit()
-  
+    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($workbook) | Out-Null
+    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null
+    $targetFolder = Split-Path -Path $xlsFile -Parent
+    if (-not (Test-Path -Path $targetFolder)) {New-Item -ItemType Directory -Path $targetFolder -Force | Out-Null}
+    Move-Item -Path $tempXlsFile -Destination $xlsFile -Force
+
     #Need to clean-up BackupFolder or these files will eventually get out of hand (filling the disk)...
     $Threshold = (Get-Date).AddMonths(-1)
     $Pattern = "$($BackupFolder)SI.$Root.*.xlsx"
@@ -113,11 +123,17 @@ function DoExcel {
     }
 }
 function DoSQL {
+    $ServerName = "7X4L243"; $DatabaseName = "TreasureChest2"; $TableName = "Apps"
+    $SQLUser = $env:TC2User; $SQLPassword = ConvertTo-SecureString $env:TC2Password -AsPlainText -Force; $SQLPassword.MakeReadOnly()
+    $SQLcredentials = New-Object System.Management.Automation.PSCredential ($SQLUser, $SQLPassword)
+    $DeleteQuery = "DELETE FROM [$TableName] WHERE [System] = '$Root';"
+    Invoke-Sqlcmd -ServerInstance $ServerName -Database $DatabaseName -Credential $SQLcredentials -Query $DeleteQuery -TrustServerCertificate
+
     #==============================================================================================================================
-    $Message = "`nSaving installation data in $ServerName.$DatabaseName.$TableName...";   Write-Message -Message $Message -Path $LogPath;    $EmailBody += "$Message<br />"
-    $EmailBody += Write-To-SQL -Tag $RegKey32 -LogPath $LogPath
-    $EmailBody += Write-To-SQL -Tag $RegKey64 -LogPath $LogPath
-    $EmailBody += Write-To-SQL -Tag "winget"  -LogPath $LogPath
+    #$Message = "`nSaving installation data in $ServerName.$DatabaseName.$TableName...";   Write-Message -Message $Message -Path $LogPath;    $EmailBody += "$Message<br />"
+    $EmailBody += Write-To-SQL -Infos $RegKey32Infos -LogPath $LogPath
+    $EmailBody += Write-To-SQL -Infos $RegKey64Infos -LogPath $LogPath
+    $EmailBody += Write-To-SQL -Infos $WinGetInfos   -LogPath $LogPath
     $EmailBody += "<br />"
  }
 function Format-Elapsed {
@@ -129,6 +145,106 @@ function Format-Elapsed {
     if ($ts.Minutes -gt 0) {$Elapsed += "$($ts.Minutes) Minutes, "}
     $Elapsed += "{0}.{1:000} Seconds" -f $ts.Seconds, $ts.Milliseconds
     return $Elapsed
+}
+function GetInstalledAppsInfo {
+    Param($RegKey, $Tag)
+    #$wteMessage = "Gathering installation information from registry ($Tag)..."; Write-Message -Message $wteMessage -Path $LogPath
+    $Objs = @()
+    $InstalledAppsInfos = Get-ItemProperty -Path $RegKey
+    Foreach($InstalledAppsInfo in $InstalledAppsInfos)
+    {
+        $Obj = [PSCustomObject]@{System=$Root;
+                                    ApplicationName = $InstalledAppsInfo.DisplayName;
+                                    Version = $InstalledAppsInfo.DisplayVersion;
+                                    Publisher = $InstalledAppsInfo.Publisher;
+                                    InstallDate = to-Date($InstalledAppsInfo.InstallDate);
+                                    EstimatedSize = Size-To-String($InstalledAppsInfo.EstimatedSize);
+                                    InstallLocation = $InstalledAppsInfo.InstallLocation;
+                                    UninstallString = $InstalledAppsInfo.UninstallString;
+                                    Source = $InstalledAppsInfo.PSPath;
+                                    RegKey = $Tag;
+                                    Inventoried = (Get-Date).Date;
+                                    }
+        $Objs += $Obj
+    }
+    $Objs
+}
+function GetWinGetInfo {
+    #$wteMessage = "Gathering installation information from registry (winget)..."; Write-Message -Message $wteMessage -Path $LogPath
+    $Objs = @()
+    #$OutputEncoding = [System.Text.Encoding]::UTF8
+    try {[Console]::OutputEncoding = [System.Text.Encoding]::UTF8} catch {}   # Ignore invalid handle errors in ISE or background Task Scheduler sessions
+    $wingetObjs = (winget list) -match '^(\p{L}|-)' |               # filter out progress-display lines
+                                ConvertFrom-FixedColumnTable |  # parse output into objects
+                                Sort-Object Name |              # sort by the Name property (column)
+        ForEach-Object {
+            $Name = $_.Name
+            $Version = $_.Version
+            $Source = $_.Source
+            $Publisher = $null
+            $InstallDate = $null
+            $EstimatedSize = $null
+            $InstallLocation = $null
+            $ID = $_.ID
+            if ($Source -eq "winget") {
+                #Parse winget show --id $_.ID to get Pulisher and other desired data
+                $show = (winget show --id $ID) -split "`n"
+                foreach($item in $show) {
+                    if ($item.StartsWith("Found ")) {
+                        $Name = $item.Substring("Found ".Length).Replace("[$ID]","")
+                    } elseif ($item.StartsWith("Publisher: ")) {
+                        $Publisher = $item.Substring("Publisher: ".Length)
+                    }
+                }
+            }
+            else {
+                $ErrorActionPreference = "Stop"
+                Try {
+                    #First look in the 32-bit Uninstall Registry Key...
+                    $RegKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$ID"
+                    $reg = Get-ItemProperty -Path $RegKey
+                    $Source = "Uninstall"
+                    $Name = $reg.DisplayName
+                    $Publisher = $reg.Publisher
+                    $InstallDate = to-Date($reg.InstallDate)
+                    $EstimatedSize = Size-To-String($reg.EstimatedSize)
+                    $InstallLocation = $reg.InstallLocation
+                } Catch [System.Management.Automation.ItemNotFoundException]{
+                    Try {
+                        #Next look in the 64-bit Uninstall Registry Key...
+                        $RegKey = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\$ID"
+                        $reg = Get-ItemProperty -Path $RegKey
+                        $Source = "Wow5432Node"
+                        $Name = $reg.DisplayName
+                        $Publisher = $reg.Publisher
+                        $InstallDate = to-Date($reg.InstallDate)
+                        $EstimatedSize = Size-To-String($reg.EstimatedSize)
+                        $InstallLocation = $reg.InstallLocation
+                    } Catch [System.Management.Automation.ItemNotFoundException]{
+                        #Where Next?
+                        $Source = $null
+                    }
+                } Finally { 
+                    $ErrorActionPreference = "Continue"
+                    $null = $reg
+                    $null = $RegKey
+                }
+            }
+            $Obj = [PSCustomObject]@{System=$Root;
+                                    ApplicationName = $Name;
+                                    Version = $Version;
+                                    Publisher = $Publisher;
+                                    InstallDate = to-Date($InstalledAppsInfo.InstallDate);
+                                    EstimatedSize = Size-To-String($InstalledAppsInfo.EstimatedSize);
+                                    InstallLocation = $InstallLocation;
+                                    UninstallString = $null;
+                                    Source = $Source;
+                                    RegKey = "winget";
+                                    Inventoried = (Get-Date).Date;
+                                    }
+            $Objs += $Obj
+        }
+    $Objs
 }
 function Send-Mail {
     Param($AppName, $EmailBody, $LogPath)
@@ -154,40 +270,13 @@ function Write-Separator {
     Write-Message -Message $Separator -Path $Path
 }
 function Write-To-Excel {
-    Param($excel, $workbook, $RegKey, $Tab, $BackColor, $FontColor=2, $LogPath)
+    Param($excel, $workbook, $Infos, $Tab, $BackColor, $FontColor=2, $LogPath)
     $errMessage = ""
-    if ($Tab -eq "winget") {
-        $wteMessage = "Gathering installation information using winget list..."
-        $Range = "A1:I1"
-    } else {
-        $wteMessage = "Gathering installation information from registry ($RegKey)..."
-        $Range = "A1:H1"
-    }
-    Write-Message -Message $wteMessage -Path $LogPath
+    $Range = "A1:H1"
     "<br />" #Write-Message is causing messages to be returned as the return value for this function, so inject line breaks where necessary
 
-    if ($Tab -ne "winget") {
-        $Objs = @()
-        $InstalledAppsInfos = Get-ItemProperty -Path $RegKey64
-        Foreach($InstalledAppsInfo in $InstalledAppsInfos)
-        {
-            $Obj = [PSCustomObject]@{Computer=$Root;
-                                     DisplayName = $InstalledAppsInfo.DisplayName;
-                                     Version = $InstalledAppsInfo.DisplayVersion;
-                                     Publisher = $InstalledAppsInfo.Publisher;
-                                     InstallDate = $InstalledAppsInfo.InstallDate;
-                                     EstimatedSize = $InstalledAppsInfo.EstimatedSize;
-                                     InstallLocation = $InstalledAppsInfo.InstallLocation;
-                                     UninstallString = $InstalledAppsInfo.UninstallString;
-                                     Source = $InstalledAppsInfo.PSPath;
-                                     }
-            $Objs += $Obj
-        }
-    }
-
     #Save $objs to Excel $Tab tab...
-    $wteMessage = "Writing data to Excel($Tab)..."
-    Write-Message -Message $wteMessage -Path $LogPath
+    $wteMessage = "Writing data to Excel($Tab)..."; Write-Message -Message $wteMessage -Path $LogPath
     "<br />" #Write-Message is causing messages to be returned as the return value for this function, so inject line breaks where necessary
 
     if ($workbook.Worksheets.Item(1).Name -eq "Sheet1") {
@@ -197,7 +286,7 @@ function Write-To-Excel {
     }
     $ws.Name = $Tab
     $ws.Tab.ColorIndex = $BackColor
-    #Format cells
+    #Format column headers
     $excel.Range($Range).Font.bold = $true
     $excel.Range($Range).Interior.ColorIndex = $BackColor
     $excel.Range($Range).Interior.Pattern = 1
@@ -205,114 +294,30 @@ function Write-To-Excel {
     $excel.ActiveWindow.SplitColumn = 1
     $excel.ActiveWindow.SplitRow = 1
     $excel.ActiveWindow.FreezePanes = $true
-    if ($Tab -eq "winget") {
-        $iName=1;    $ws.Cells(1, $iName).Value = "Application Name";	$ws.Columns($iName).ColumnWidth = 40 
-        $iVer=2;     $ws.Cells(1, $iVer).Value = "Version";				$ws.Columns($iVer).ColumnWidth = 15
-        $iAvail=3;   $ws.Cells(1, $iAvail).Value = "Available";			$ws.Columns($iAvail).ColumnWidth = 15
-        $iSource=4;  $ws.Cells(1, $iSource).Value = "Source";	        $ws.Columns($iSource).ColumnWidth = 40 
-        $iPub=5;     $ws.Cells(1, $iPub).Value = "Publisher";			$ws.Columns($iPub).ColumnWidth = 15 
-        $iDate=6;    $ws.Cells(1, $iDate).Value = "Install Date";		$ws.Columns($iDate).ColumnWidth = 15 
-        $iSize=7;    $ws.Cells(1, $iSize).Value = "Estimated Size";		$ws.Columns($iSize).ColumnWidth = 15 
-        $iLoc=8;     $ws.Cells(1, $iLoc).Value = "Install Location";	$ws.Columns($iLoc).ColumnWidth = 40 
-        $iID=9;      $ws.Cells(1, $iID).Value = "ID";	                $ws.Columns($iID).ColumnWidth = 40 
-    } else {
-        $iName=1;    $ws.Cells(1, $iName).Value = "Application Name";	$ws.Columns($iName).ColumnWidth = 40 
-        $iVer=2;     $ws.Cells(1, $iVer).Value = "Version";				$ws.Columns($iVer).ColumnWidth = 15
-        $iPub=3;     $ws.Cells(1, $iPub).Value = "Publisher";			$ws.Columns($iPub).ColumnWidth = 15 
-        $iDate=4;    $ws.Cells(1, $iDate).Value = "Install Date";		$ws.Columns($iDate).ColumnWidth = 15 
-        $iSize=5;    $ws.Cells(1, $iSize).Value = "Estimated Size";		$ws.Columns($iSize).ColumnWidth = 15 
-        $iLoc=6;     $ws.Cells(1, $iLoc).Value = "Install Location";	$ws.Columns($iLoc).ColumnWidth = 40 
-        $iUnins=7;   $ws.Cells(1, $iUnins).Value = "Uninstall String";	$ws.Columns($iUnins).ColumnWidth = 40 
-        $iSource=8;  $ws.Cells(1, $iSource).Value = "Source";	        $ws.Columns($iSource).ColumnWidth = 40 
-    }
+
+    $iName=1;        $ws.Cells(1, $iName).Value = "Application Name";	$ws.Columns($iName).ColumnWidth = 40 
+    $iVer=2;         $ws.Cells(1, $iVer).Value = "Version";				$ws.Columns($iVer).ColumnWidth = 15
+    $iPub=3;         $ws.Cells(1, $iPub).Value = "Publisher";			$ws.Columns($iPub).ColumnWidth = 15 
+    $iDate=4;        $ws.Cells(1, $iDate).Value = "Install Date";		$ws.Columns($iDate).ColumnWidth = 15 
+    $iSize=5;        $ws.Cells(1, $iSize).Value = "Estimated Size";		$ws.Columns($iSize).ColumnWidth = 15 
+    $iLoc=6;         $ws.Cells(1, $iLoc).Value = "Install Location";	$ws.Columns($iLoc).ColumnWidth = 40 
+    $iUnins=7;       $ws.Cells(1, $iUnins).Value = "Uninstall String";	$ws.Columns($iUnins).ColumnWidth = 40 
+    $iSource=8;      $ws.Cells(1, $iSource).Value = "Source";	        $ws.Columns($iSource).ColumnWidth = 40 
+    $iInventoried=9; $ws.Cells(1, $iInventoried).Value = "Inventoried";	$ws.Columns($iInventoried).ColumnWidth = 15 
 
     $Row = 2
 
-    if ($Tab -eq "winget") {
-        #[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new() 
-        try {[Console]::OutputEncoding = [System.Text.Encoding]::UTF8} catch {}   # Ignore invalid handle errors in ISE or background Task Scheduler sessions
-        $Objs = (winget list) -match '^(\p{L}|-)' |               # filter out progress-display lines
-                                  ConvertFrom-FixedColumnTable |  # parse output into objects
-                                  Sort-Object Name |              # sort by the Name property (column)
-            ForEach-Object {
-                $Name = $_.Name
-                $Version = $_.Version
-                $Available = $_.Available
-                $Source = $_.Source
-                $Publisher = "Unavailable"
-                $InstallDate = "Unavailable"
-                $EstimatedSize = "Unavailable"
-                $InstallLocation = "Unavailable"
-                $ID = $_.ID
-                if ($Source -eq "winget") {
-                    #Parse winget show --id $_.ID to get Pulisher and other desired data
-                    $show = (winget show --id $ID) -split "`n"
-                    foreach($item in $show) {
-                        if ($item.StartsWith("Found ")) {
-                            $Name = $item.Substring("Found ".Length).Replace("[$ID]","")
-                        } elseif ($item.StartsWith("Publisher: ")) {
-                            $Publisher = $item.Substring("Publisher: ".Length)
-                        }
-                    }
-                }
-                else {
-                    $ErrorActionPreference = "Stop"
-                    Try {
-                        #First look in the 32-bit Uninstall Registry Key...
-                        $RegKey = $RegKey32.Replace("*", $ID)
-                        $reg = Get-ItemProperty -Path $RegKey
-                        $Source = "Uninstall"
-                        $Name = $reg.DisplayName
-                        $Publisher = $reg.Publisher
-                        $InstallDate = $reg.InstallDate
-                        $EstimatedSize = $reg.EstimatedSize
-                        $InstallLocation = $reg.InstallLocation
-                    } Catch [System.Management.Automation.ItemNotFoundException]{
-                        Try {
-                            #Next look in the 64-bit Uninstall Registry Key...
-                            $RegKey = $RegKey64.Replace("*", $ID)
-                            $reg = Get-ItemProperty -Path $RegKey
-                            $Source = "Wow5432Node"
-                            $Name = $reg.DisplayName
-                            $Publisher = $reg.Publisher
-                            $InstallDate = $reg.InstallDate
-                            $EstimatedSize = $reg.EstimatedSize
-                            $InstallLocation = $reg.InstallLocation
-                        } Catch [System.Management.Automation.ItemNotFoundException]{
-                            #Where Next?
-                            $Source = "Unavailable"
-                        }
-                    } Finally { 
-                        $ErrorActionPreference = "Continue"
-                        $null = $reg
-                        $null = $RegKey
-                    }
-                }
-
-                $ws.Cells.Item($Row, $iName) = $Name
-                $ws.Cells.Item($Row, $iVer) = $Version
-                $ws.Cells.Item($Row, $iAvail) = $Available
-                $ws.Cells.Item($Row, $iSource) = $Source
-                $ws.Cells.Item($Row, $iPub) = $Publisher
-                $ws.Cells.Item($Row, $iDate) = $InstallDate
-                $ws.Cells.Item($Row, $iSize) = $EstimatedSize
-                $ws.Cells.Item($Row, $iLoc) = $InstallLocation
-                $ws.Cells.Item($Row, $iID) = $ID
-                $Row += 1
-            }
-    } else {
-        $Objs | Where-Object { $_.DisplayName } | Sort-Object -Property DisplayName |
-            ForEach-Object {
-                $ws.Cells.Item($Row, $iName) = $_.DisplayName
-                $ws.Cells.Item($Row, $iVer) = $_.Version
-                $ws.Cells.Item($Row, $iPub) = $_.Publisher
-                $ws.Cells.Item($Row, $iDate) = $_.InstallDate
-                $ws.Cells.Item($Row, $iSize) = $_.EstimatedSize
-                $ws.Cells.Item($Row, $iLoc) = $_.InstallLocation
-                $ws.Cells.Item($Row, $iUnins) = $_.UninstallString
-                $ws.Cells.Item($Row, $iSource) = $_.Source
-                $Row += 1
-            }
+    Foreach($Info in $Infos) {
+        $ws.Cells.Item($Row, $iName) = $Info.ApplicationName
+        $ws.Cells.Item($Row, $iVer) = $Info.Version
+        $ws.Cells.Item($Row, $iPub) = $Info.Publisher
+        $ws.Cells.Item($Row, $iDate) = $Info.InstallDate
+        $ws.Cells.Item($Row, $iSize) = $Info.EstimatedSize
+        $ws.Cells.Item($Row, $iLoc) = $Info.InstallLocation
+        $ws.Cells.Item($Row, $iUnins) = $Info.UninstallString
+        $ws.Cells.Item($Row, $iSource) = $Info.Source
+        $ws.Cells.Item($Row, $iInventoried) = $Info.Inventoried
+        $Row += 1
     }
     $ws.UsedRange.EntireColumn.AutoFilter() | Out-Null
     $ws.UsedRange.EntireColumn.AutoFit() | Out-Null
@@ -346,144 +351,31 @@ function Write-To-Excel {
     #wmic product get Name,Vendor,Version,Description,InstallDate,InstallLocation
     #==============================================================================================================================
 }
-function Write-To-SQL {
-    Param($Tag, $LogPath)
-
-    switch ($Tag) {
-        "$RegKey32" {$Tag = "Uninstall";   break}
-        "$RegKey64" {$Tag = "Wow6432Node"; break}
-        default {break}
+function to-Date {
+    Param($DirtyDate)
+    $ParsedDate = [DateTime]::MinValue
+    $CleanDate  = $null
+    if (-not [string]::IsNullOrWhiteSpace($DirtyDate)) {
+        if ([DateTime]::TryParseExact($DirtyDate.Trim(), "yyyyMMdd", $null, [System.Globalization.DateTimeStyles]::None, [ref]$ParsedDate)) {
+            $CleanDate = $ParsedDate.Date
         }
- 
-    $username = $env:TC2User; $password = ConvertTo-SecureString $env:TC2Password -AsPlainText -Force; $password.MakeReadOnly()
-    $cred = New-Object System.Management.Automation.PSCredential ($username, $password)
-    $DeleteQuery = "DELETE FROM [$TableName] WHERE [System] = '$Root' And RegKey='$Tag';"
-    Invoke-Sqlcmd -ServerInstance $ServerName -Database $DatabaseName -Credential $cred -Query $DeleteQuery -TrustServerCertificate
-
-    $Inventoried = (Get-Date).Date
-
-    $Objs = @()
-    if ($Tag -ne "winget") {
-        $InstalledAppsInfos = Get-ItemProperty -Path $RegKey64 | Where-Object { $_.DisplayName -ne $null }
-        Foreach($InstalledAppsInfo in $InstalledAppsInfos)
-        {
-            $ParsedDate = [DateTime]::MinValue
-            $CleanDate  = $null
-            if (-not [string]::IsNullOrWhiteSpace($InstalledAppsInfo.InstallDate)) {
-                if ([DateTime]::TryParseExact($InstalledAppsInfo.InstallDate.Trim(), "yyyyMMdd", $null, [System.Globalization.DateTimeStyles]::None, [ref]$ParsedDate)) {
-                    $CleanDate = $ParsedDate.Date
-                }
-            }
-            $SizeMB = $null
-            if ($null -ne $InstalledAppsInfo.EstimatedSize -and $InstalledAppsInfo.EstimatedSize -gt 0) {
-                $CalculatedMB = [math]::Round(($InstalledAppsInfo.EstimatedSize / 1024), 2)
-                $SizeMB = "$CalculatedMB MB"
-            }
-
-            $Obj = [PSCustomObject]@{System=$Root;
-                                     ApplicationName = $InstalledAppsInfo.DisplayName;
-                                     Version = $InstalledAppsInfo.DisplayVersion;
-                                     Publisher = $InstalledAppsInfo.Publisher;
-                                     InstallDate = $CleanDate
-                                     EstimatedSize = $SizeMB
-                                     InstallLocation = $InstalledAppsInfo.InstallLocation;
-                                     UninstallString = $InstalledAppsInfo.UninstallString;
-                                     Source = $InstalledAppsInfo.PSPath;
-                                     RegKey = $Tag;
-                                     Inventoried = $Inventoried;
-                                     }
-            $Objs += $Obj
-        }
-    } else {
-        #$OutputEncoding = [System.Text.Encoding]::UTF8
-        try {[Console]::OutputEncoding = [System.Text.Encoding]::UTF8} catch {}   # Ignore invalid handle errors in ISE or background Task Scheduler sessions
-        $wingetObjs = (winget list) -match '^(\p{L}|-)' |               # filter out progress-display lines
-                                  ConvertFrom-FixedColumnTable |  # parse output into objects
-                                  Sort-Object Name |              # sort by the Name property (column)
-            ForEach-Object {
-                $Name = $_.Name
-                $Version = $_.Version
-                $Source = $_.Source
-                $Publisher = $null
-                $InstallDate = $null
-                $EstimatedSize = $null
-                $InstallLocation = $null
-                $ID = $_.ID
-                if ($Source -eq "winget") {
-                    #Parse winget show --id $_.ID to get Pulisher and other desired data
-                    $show = (winget show --id $ID) -split "`n"
-                    foreach($item in $show) {
-                        if ($item.StartsWith("Found ")) {
-                            $Name = $item.Substring("Found ".Length).Replace("[$ID]","")
-                        } elseif ($item.StartsWith("Publisher: ")) {
-                            $Publisher = $item.Substring("Publisher: ".Length)
-                        }
-                    }
-                }
-                else {
-                    $ErrorActionPreference = "Stop"
-                    Try {
-                        #First look in the 32-bit Uninstall Registry Key...
-                        $RegKey = $RegKey32.Replace("*", $ID)
-                        $reg = Get-ItemProperty -Path $RegKey
-                        $Source = "Uninstall"
-                        $Name = $reg.DisplayName
-                        $Publisher = $reg.Publisher
-                        $InstallDate = $reg.InstallDate
-                        $EstimatedSize = $reg.EstimatedSize
-                        $InstallLocation = $reg.InstallLocation
-                    } Catch [System.Management.Automation.ItemNotFoundException]{
-                        Try {
-                            #Next look in the 64-bit Uninstall Registry Key...
-                            $RegKey = $RegKey64.Replace("*", $ID)
-                            $reg = Get-ItemProperty -Path $RegKey
-                            $Source = "Wow5432Node"
-                            $Name = $reg.DisplayName
-                            $Publisher = $reg.Publisher
-                            $InstallDate = $reg.InstallDate
-                            $EstimatedSize = $reg.EstimatedSize
-                            $InstallLocation = $reg.InstallLocation
-                        } Catch [System.Management.Automation.ItemNotFoundException]{
-                            #Where Next?
-                            $Source = $null
-                        }
-                    } Finally { 
-                        $ErrorActionPreference = "Continue"
-                        $null = $reg
-                        $null = $RegKey
-                    }
-                }
-                $ParsedDate = [DateTime]::MinValue
-                $CleanDate  = $null
-                if (-not [string]::IsNullOrWhiteSpace($InstallDate)) {
-                    if ([DateTime]::TryParseExact($InstallDate.Trim(), "yyyyMMdd", $null, [System.Globalization.DateTimeStyles]::None, [ref]$ParsedDate)) {
-                        $CleanDate = $ParsedDate.Date
-                    }
-                }
-                $SizeMB = $null
-                if ($null -ne $EstimatedSize -and $EstimatedSize -gt 0) {
-                    $CalculatedMB = [math]::Round(($EstimatedSize / 1024), 2)
-                    $SizeMB = "$CalculatedMB MB"
-                }
-                $Obj = [PSCustomObject]@{System=$Root;
-                                     ApplicationName = $Name;
-                                     Version = $Version;
-                                     Publisher = $Publisher;
-                                     InstallDate = $CleanDate
-                                     EstimatedSize = $SizeMB
-                                     InstallLocation = $InstallLocation;
-                                     UninstallString = $null;
-                                     Source = $Source;
-                                     RegKey = $Tag;
-                                     Inventoried = $Inventoried
-                                     }
-                $Objs += $Obj
-            }
     }
-
-    # Insert the fresh data
-
-    $Objs | Write-SqlTableData -ServerInstance $ServerName -DatabaseName $DatabaseName -Credential $cred -SchemaName "dbo" -TableName $TableName -TrustServerCertificate
+    $CleanDate
+}
+function Size-To-String {
+    Param($size)
+    $SizeMB = $null
+    if ($null -ne $size -and $size -gt 0) {
+        $CalculatedMB = [math]::Round(($size / 1024), 2)
+        $SizeMB = "$CalculatedMB MB"
+    }
+    $SizeMB
+}
+function Write-To-SQL {
+    Param($Infos, $LogPath)
+    $wteMessage = "Saving $Tab data to $ServerName.$DatabaseName.$TableName..."
+    Write-Message -Message $wteMessage -Path $LogPath
+    $Infos | Write-SqlTableData -ServerInstance $ServerName -DatabaseName $DatabaseName -Credential $SQLCredentials -SchemaName "dbo" -TableName $TableName -TrustServerCertificate
 }
 .{
     $AppName = "SoftwareInventory"
@@ -501,10 +393,10 @@ function Write-To-SQL {
     $xlsFile = "$($BackupFolder)SI.$Root.$now.xlsx";    
     $Message = "xlsFile: $xlsFile";              Write-Message -Message $Message -Path $LogPath;    $EmailBody += "$Message<br /><br />"
     
-    $ServerName = "7X4L243"; $DatabaseName = "TreasureChest2"; $TableName = "Apps"
-    $RegKey32 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
-    $RegKey64 = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
-    
+    $RegKey32Infos = GetInstalledAppsInfo -RegKey "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" -Tag "Uninstall"
+    $RegKey64Infos = GetInstalledAppsInfo -RegKey "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" -Tag "Wow6432Node"
+    $WinGetInfos = GetWinGetInfo
+
     DoExcel
     DoSQL
  

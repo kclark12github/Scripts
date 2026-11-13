@@ -26,11 +26,12 @@ $email = @{
     To = "$env:USERNAME <$env:My_EMAIL>"
     Subject = $Subject
     SMTPServer = $env:SMTP_ADDRESS
-    Port = $env:SMTP_PORT
+    Port = [int]$env:SMTP_PORT
     Body = $Body
-    BodyAsHtml = $AsHTML
+    BodyAsHtml = [bool]$AsHTML
     Attachments = $LogFile
     Credential = $Credential
+    SecureSocketOptions = 'Auto' # Automatically negotiates SSL/TLS cleanly
 }
-Send-MailMessage @email -UseSsl
+Send-EmailMessage @email
 
