@@ -133,6 +133,8 @@ function DoSQL {
 
     #==============================================================================================================================
     #$Message = "`nSaving installation data in $ServerName.$DatabaseName.$TableName...";   Write-Message -Message $Message -Path $LogPath;    $EmailBody += "$Message<br />"
+    $wteMessage = "`nSaving data to $ServerName.$DatabaseName.$TableName..."
+    Write-Message -Message $wteMessage -Path $LogPath
     $EmailBody += Write-To-SQL -Infos $RegKey32Infos -LogPath $LogPath
     $EmailBody += Write-To-SQL -Infos $RegKey64Infos -LogPath $LogPath
     $EmailBody += Write-To-SQL -Infos $WinGetInfos   -LogPath $LogPath
@@ -322,8 +324,6 @@ function Write-To-Excel {
 }
 function Write-To-SQL {
     Param($Infos, $LogPath)
-    $wteMessage = "Saving $Tab data to $ServerName.$DatabaseName.$TableName..."
-    Write-Message -Message $wteMessage -Path $LogPath
     $Infos | Write-SqlTableData -ServerInstance $ServerName -DatabaseName $DatabaseName -Credential $SQLCredentials -SchemaName "dbo" -TableName $TableName -TrustServerCertificate
 }
 .{
