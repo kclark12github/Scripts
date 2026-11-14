@@ -69,10 +69,10 @@ foreach ($Script in $ScriptsToDeploy) {
         Write-Warning "  [Local] Missing source file: $SourceFile"
     }
 }
-Write-Host "Deploying to local PowerShell module folder ($LocalCustomModPath)..." -ForegroundColor Cyan
+Write-Host "Deploying to local PowerShell module folder ($LocalBaseModDir)..." -ForegroundColor Cyan
 if (Test-Path $DevModuleFolder) {
-    Copy-Item -Path "$DevModuleFolder\*" -Destination $LocalCustomModPath -Recurse -Force
-    Write-Host "  [Local] Deployed module: $CustomModuleName" -ForegroundColor Green
+    Copy-Item -Path "$DevModuleFolder\*" -Destination $LocalBaseModDir -Recurse -Force
+    Write-Host "  [Local] Deployed modules: $LocalBaseModDir" -ForegroundColor Green
 } else {
     Write-Warning "  [Local] Missing module folder: $DevModuleFolder"
 }
@@ -126,7 +126,8 @@ foreach ($Computer in $RemoteComputers) {
                 $BaseDir = ($env:PSModulePath -split ';' | Where-Object { 
                     $_ -notlike "$env:ProgramFiles*" -and $_ -notlike "$env:SystemRoot*" -and -not [string]::IsNullOrWhiteSpace($_)
                 })[0]
-                return (Join-Path $BaseDir $MyModName)
+                #return (Join-Path $BaseDir $MyModName)
+                return $BaseDir
             } -Args $PubModules, $CustomMod
 
             #Create destination folders on the remote machine
@@ -148,7 +149,7 @@ foreach ($Computer in $RemoteComputers) {
         # Step C: Copy custom MyTools module files over the session
         if (Test-Path $DevModuleFolder) {
             Copy-Item -Path "$DevModuleFolder\*" -Destination $RemoteModDestination -ToSession $Session -Recurse -Force
-            Write-Host "  [$Computer] Deployed custom module: $CustomModuleName -> $RemoteModDestination" -ForegroundColor Green
+            Write-Host "  [$Computer] Deployed custom modules: $RemoteModDestination" -ForegroundColor Green
         }
 
         Remove-PSSession $Session
